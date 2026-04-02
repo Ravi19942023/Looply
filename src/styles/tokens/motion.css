@@ -1,0 +1,28 @@
+:root {
+  --duration-micro: 150ms;
+  --duration-element: 200ms;
+  --duration-enter: 300ms;
+  --duration-exit: 200ms;
+  --duration-panel: 350ms;
+  --duration-page: 200ms;
+  --duration-chart: 400ms;
+  --duration-shimmer: 1500ms;
+
+  --ease-default: ease;
+  --ease-out: ease-out;
+  --ease-in: ease-in;
+  --ease-panel: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-micro: 0ms;
+    --duration-element: 0ms;
+    --duration-enter: 0ms;
+    --duration-exit: 0ms;
+    --duration-panel: 0ms;
+    --duration-page: 0ms;
+    --duration-chart: 0ms;
+    --duration-shimmer: 0ms;
+  }
+}

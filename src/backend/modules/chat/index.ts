@@ -1,0 +1,10 @@
+export { CHAT_MAX_STEPS, CHAT_MODEL } from "./chat.constants";
+export { ChatController } from "./chat.controller";
+export { ChatMessageSchema, ChatRequestSchema } from "./chat.schema";
+export { ChatService } from "./chat.service";
+export { chatSystemPromptTemplate } from "@/backend/lib/prompts/chat-system.prompt";
+export type { PromptContext, ToolDescription, UserMemorySnapshot } from "./prompt-builder.types";
+export { TOOL_DESCRIPTIONS, PROMPT_VERSION } from "./prompt-builder.constants";
+export { buildAllTools } from "./tools";
+export type { ChatMessage } from "./chat.types";
+export type { ChatRequest } from "./chat.schema";

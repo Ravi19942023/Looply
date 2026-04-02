@@ -1,0 +1,1 @@
+export const CHAT_CHARACTER_LIMIT = 2_000;

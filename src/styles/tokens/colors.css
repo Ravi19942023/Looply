@@ -1,0 +1,100 @@
+:root {
+  /* Palette - Modern OKLCH (Indigo/Slate spectrum) */
+  --color-primary-oklch: 0.25 0.08 270; /* Deep Indigo */
+  --color-primary-light-oklch: 0.65 0.15 260; /* Vibrant Indigo */
+  --color-accent-oklch: 0.6 0.18 250; /* Electric Blue */
+  
+  --color-primary-950: oklch(0.12 0.03 270);
+  --color-primary-900: oklch(0.18 0.04 270);
+  --color-primary-800: oklch(0.25 0.06 270);
+  --color-primary-700: oklch(0.35 0.08 270);
+  --color-primary-600: oklch(0.45 0.1 270);
+  --color-primary-100: oklch(0.92 0.02 270);
+
+  --color-accent-700: oklch(0.45 0.18 250);
+  --color-accent-600: oklch(0.55 0.2 250);
+  --color-accent-500: oklch(0.65 0.22 250);
+  --color-accent-400: oklch(0.75 0.15 250);
+  --color-accent-200: oklch(0.9 0.05 250);
+  --color-accent-50: oklch(0.98 0.01 250);
+
+  --color-success: oklch(0.62 0.15 150);
+  --color-success-bg: oklch(0.95 0.03 150);
+  --color-warning: oklch(0.78 0.15 80);
+  --color-warning-bg: oklch(0.97 0.03 80);
+  --color-danger: oklch(0.6 0.18 20);
+  --color-danger-bg: oklch(0.96 0.03 20);
+
+  --color-surface-0: oklch(1 0 0);
+  --color-surface-50: oklch(0.99 0.005 270);
+  --color-surface-100: oklch(0.97 0.01 270);
+  --color-surface-200: oklch(0.94 0.015 270);
+  --color-surface-300: oklch(0.9 0.02 270);
+  --color-surface-400: oklch(0.75 0.02 270);
+  --color-surface-500: oklch(0.6 0.02 270);
+  --color-surface-700: oklch(0.35 0.03 270);
+  --color-surface-900: oklch(0.2 0.04 270);
+  --color-surface-950: oklch(0.12 0.05 270);
+
+  --color-bg-base: var(--color-surface-50);
+  --color-bg-surface: var(--color-surface-0);
+  --color-bg-subtle: var(--color-surface-100);
+  --color-border: var(--color-surface-200);
+  --color-border-strong: var(--color-surface-300);
+  --color-border-subtle: var(--color-surface-100);
+  
+  --color-text-primary: var(--color-surface-950);
+  --color-text-body: var(--color-surface-700);
+  --color-text-secondary: oklch(0.45 0.03 270);
+  --color-text-muted: var(--color-surface-500);
+  --color-text-disabled: var(--color-surface-400);
+  
+  --color-accent: var(--color-accent-600);
+  --color-accent-hover: var(--color-accent-700);
+  --color-primary: var(--color-primary-900);
+  --color-text-inverse: var(--color-surface-0);
+
+  --surface: var(--color-bg-base);
+  --surface-container-low: var(--color-surface-50);
+  --surface-container-lowest: var(--color-surface-0);
+  --surface-container-highest: var(--color-surface-200);
+  
+  --color-surface-raised: var(--surface-container-lowest);
+  --color-surface-overlay: var(--color-surface-50);
+  
+  --gradient-primary: linear-gradient(135deg, oklch(0.18 0.04 270), oklch(0.25 0.06 270));
+  --gradient-accent: linear-gradient(135deg, var(--color-accent-600), var(--color-accent-400));
+  
+  /* Glassmorphism */
+  --glass-bg: oklch(1 0 0 / 70%);
+  --glass-border: oklch(1 0 0 / 40%);
+  --glass-blur: 12px;
+}
+
+.dark {
+  --color-primary-950: oklch(0.08 0.02 270);
+  --color-primary-900: oklch(0.12 0.03 270);
+  --color-primary-800: oklch(0.18 0.04 270);
+  --color-primary-700: oklch(0.25 0.06 270);
+  --color-primary-600: oklch(0.35 0.08 270);
+  --color-primary-100: oklch(0.25 0.04 270);
+
+  --color-surface-0: oklch(0.14 0.01 270);
+  --color-surface-50: oklch(0.120 0.01 270);
+  --color-surface-100: oklch(0.18 0.015 270);
+  --color-surface-200: oklch(0.24 0.02 270);
+  --color-surface-300: oklch(0.32 0.025 270);
+  --color-surface-400: oklch(0.45 0.02 270);
+  --color-surface-500: oklch(0.55 0.02 270);
+  --color-surface-700: oklch(0.8 0.015 270);
+  --color-surface-900: oklch(0.94 0.01 270);
+  --color-surface-950: oklch(0.98 0.005 270);
+
+  --color-bg-base: oklch(0.1 0.01 270);
+  --color-bg-surface: oklch(0.14 0.01 270);
+  --color-border: oklch(0.22 0.02 270);
+  
+  --glass-bg: oklch(0.14 0.01 270 / 70%);
+  --glass-border: oklch(1 0 0 / 10%);
+}
+
