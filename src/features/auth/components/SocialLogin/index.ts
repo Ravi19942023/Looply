@@ -1,1 +1,0 @@
-export { SocialLogin } from "./SocialLogin";

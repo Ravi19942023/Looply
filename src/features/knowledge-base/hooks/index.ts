@@ -1,1 +1,0 @@
-export { useKnowledgeBase } from "./useKnowledgeBase";

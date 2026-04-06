@@ -1,1 +1,0 @@
-export const DASHBOARD_DEFAULT_PERIOD = "30d";

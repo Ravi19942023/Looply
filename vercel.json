@@ -1,8 +1,3 @@
 {
-  "crons": [
-    {
-      "path": "/api/v1/cron/recompute-metrics",
-      "schedule": "0 2 * * *"
-    }
-  ]
+  "framework": "nextjs"
 }

@@ -1,1 +1,0 @@
-export { useCampaigns } from "./useCampaigns";
