@@ -1,7 +1,7 @@
-export const DEFAULT_CHAT_MODEL = "moonshotai/kimi-k2-0905";
+export const DEFAULT_CHAT_MODEL = process.env.AI_CHAT_MODEL ?? "moonshotai/kimi-k2-0905";
 
 export const titleModel = {
-  id: "mistral/mistral-small",
+  id: process.env.AI_SUMMARY_MODEL ?? "mistral/mistral-small",
   name: "Mistral Small",
   provider: "mistral",
   description: "Fast model for title generation",
@@ -74,6 +74,13 @@ export const chatModels: ChatModel[] = [
     description: "Open-source 120B parameter model",
     gatewayOrder: ["fireworks", "bedrock"],
     reasoningEffort: "low",
+  },
+  {
+    id: "openai/gpt-4o-mini",
+    name: "GPT-4o Mini",
+    provider: "openai",
+    description: "Fast, affordable, and highly capable model",
+    gatewayOrder: ["bedrock", "groq"],
   },
   {
     id: "xai/grok-4.1-fast-non-reasoning",

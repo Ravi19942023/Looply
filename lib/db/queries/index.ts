@@ -850,6 +850,131 @@ export async function getAiCostSummary(input: { days: number }) {
   };
 }
 
+export async function getTelemetrySummary(input: { days: number }) {
+  const usageRows = await db
+    .select({
+      source: ragTelemetryLog.source,
+      totalTokens: ragTelemetryLog.totalTokens,
+      createdAt: ragTelemetryLog.createdAt,
+    })
+    .from(ragTelemetryLog);
+
+  const filteredRows = usageRows.filter((row) =>
+    isWithinDays(row.createdAt, input.days)
+  );
+
+  const totalTokens = filteredRows.reduce(
+    (sum, row) => sum + row.totalTokens,
+    0
+  );
+  const chatTokens = filteredRows
+    .filter((row) => row.source === CHAT_USAGE_SOURCE)
+    .reduce((sum, row) => sum + row.totalTokens, 0);
+  const ragTokens = filteredRows
+    .filter((row) => row.source.startsWith(RAG_USAGE_PREFIX))
+    .reduce((sum, row) => sum + row.totalTokens, 0);
+
+  return {
+    totalTokens,
+    chatTokens,
+    ragTokens,
+  };
+}
+
+export async function getPaginatedChatSessionsTelemetry(input: {
+  days: number;
+  page: number;
+  pageSize: number;
+}) {
+  const rows = await db
+    .select({
+      actorEmail: user.email,
+      chatId: ragTelemetryLog.chatId,
+      completionTokens: ragTelemetryLog.completionTokens,
+      createdAt: ragTelemetryLog.createdAt,
+      model: ragTelemetryLog.model,
+      promptTokens: ragTelemetryLog.promptTokens,
+      title: chat.title,
+      totalTokens: ragTelemetryLog.totalTokens,
+    })
+    .from(ragTelemetryLog)
+    .leftJoin(chat, eq(ragTelemetryLog.chatId, chat.id))
+    .leftJoin(user, eq(ragTelemetryLog.actorId, user.id))
+    .where(eq(ragTelemetryLog.source, CHAT_USAGE_SOURCE))
+    .orderBy(desc(ragTelemetryLog.createdAt));
+
+  const filteredRows = rows.filter((row) =>
+    isWithinDays(row.createdAt, input.days)
+  );
+
+  const groupedRows = Array.from(
+    filteredRows
+      .reduce<
+        Map<
+          string,
+          {
+            actorEmail: string | null;
+            chatId: string | null;
+            completionTokens: number;
+            lastActivityAt: Date;
+            model: string | null;
+            promptTokens: number;
+            startedAt: Date;
+            title: string | null;
+            totalTokens: number;
+          }
+        >
+      >((groups, row) => {
+        const key = `${row.chatId ?? "global"}:${row.model ?? "unknown"}`;
+        const existing = groups.get(key);
+
+        if (!existing) {
+          groups.set(key, {
+            actorEmail: row.actorEmail ?? null,
+            chatId: row.chatId ?? null,
+            completionTokens: row.completionTokens,
+            lastActivityAt: row.createdAt,
+            model: row.model ?? null,
+            promptTokens: row.promptTokens,
+            startedAt: row.createdAt,
+            title: row.title ?? null,
+            totalTokens: row.totalTokens,
+          });
+          return groups;
+        }
+
+        existing.totalTokens += row.totalTokens;
+        existing.promptTokens += row.promptTokens;
+        existing.completionTokens += row.completionTokens;
+        if (row.createdAt < existing.startedAt) {
+          existing.startedAt = row.createdAt;
+        }
+        if (row.createdAt > existing.lastActivityAt) {
+          existing.lastActivityAt = row.createdAt;
+        }
+
+        return groups;
+      }, new Map())
+      .values()
+  ).sort(
+    (left, right) =>
+      right.lastActivityAt.getTime() - left.lastActivityAt.getTime()
+  );
+
+  const pagination = buildPaginationMeta({
+    page: input.page,
+    pageSize: input.pageSize,
+    total: groupedRows.length,
+  });
+
+  const offset = (pagination.page - 1) * pagination.pageSize;
+
+  return {
+    items: groupedRows.slice(offset, offset + pagination.pageSize),
+    pagination,
+  };
+}
+
 export async function getSystemActivityFeed(input: {
   page: number;
   pageSize: number;

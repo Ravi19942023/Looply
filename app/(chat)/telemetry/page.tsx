@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageShell } from "@/components/workspace/page-shell";
-import { StatCard } from "@/components/workspace/stat-card";
+import { TelemetryChatSessionsTable } from "@/components/workspace/telemetry-chat-sessions-table";
+import { TelemetryRagOperationsTable } from "@/components/workspace/telemetry-rag-operations-table";
+import { TelemetrySummaryCards } from "@/components/workspace/telemetry-summary-cards";
+import { TelemetryTabs } from "@/components/workspace/telemetry-tabs";
 import { WorkspacePagination } from "@/components/workspace/workspace-pagination";
-import { getAiCostSummary, getTelemetryOverview } from "@/lib/db/queries";
+import {
+  getAiCostSummary,
+  getPaginatedChatSessionsTelemetry,
+  getTelemetrySummary,
+} from "@/lib/db/queries";
 import {
   createUrlSearchParams,
   getSearchParamValue,
@@ -14,8 +21,9 @@ import {
   getPaginatedRagTelemetryRows,
   getRagTelemetrySummary,
 } from "@/lib/rag/service";
-
-const VALID_DAY_WINDOWS = new Set([7, 30, 90]);
+ 
+const DEFAULT_TELEMETRY_TAB = "chats";
+const TELEMETRY_PAGE_SIZE = 10;
 
 function buildTelemetryHref(
   searchParams: SearchParams,
@@ -38,8 +46,8 @@ function buildTelemetryHref(
 
 function getActionClassName(isActive: boolean) {
   return isActive
-    ? "inline-flex h-10 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition hover:bg-foreground/90"
-    : "inline-flex h-10 items-center rounded-xl border border-border/40 bg-background/70 px-4 text-sm font-medium transition hover:bg-muted";
+    ? "inline-flex h-8 items-center rounded-lg bg-foreground px-3 text-[11px] font-bold uppercase tracking-[0.1em] text-background transition hover:bg-foreground/90"
+    : "inline-flex h-8 items-center rounded-lg border border-border/40 bg-background/50 px-3 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground transition hover:bg-muted hover:text-foreground";
 }
 
 export default async function Page({
@@ -48,197 +56,93 @@ export default async function Page({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (await searchParams) ?? {};
-  const rawDays = getSearchParamValue(params.days);
-  const parsedDays = rawDays ? Number.parseInt(rawDays, 10) : 30;
-  const days = VALID_DAY_WINDOWS.has(parsedDays) ? parsedDays : 30;
+  const days = 365; // Default to full history window for recent records
+  const rawTab = getSearchParamValue(params.tab);
+  const tab = rawTab === "rag" ? "rag" : DEFAULT_TELEMETRY_TAB;
   const paginationInput = normalizePaginationInput({
     page: getSearchParamValue(params.page),
     pageSize: getSearchParamValue(params.pageSize),
+    defaultPageSize: TELEMETRY_PAGE_SIZE,
+    maxPageSize: TELEMETRY_PAGE_SIZE,
   });
 
-  const [telemetry, ragSummary, ragRows, aiCost] = await Promise.all([
-    getTelemetryOverview({ days }),
+  const [summary, ragSummary, cost, chatSessions, ragRows] = await Promise.all([
+    getTelemetrySummary({ days }),
     getRagTelemetrySummary({ days }),
+    getAiCostSummary({ days }),
+    getPaginatedChatSessionsTelemetry({
+      days,
+      page: paginationInput.page,
+      pageSize: paginationInput.pageSize,
+    }),
     getPaginatedRagTelemetryRows({
       days,
       page: paginationInput.page,
       pageSize: paginationInput.pageSize,
     }),
-    getAiCostSummary({ days }),
   ]);
+
+  const activeData = tab === "rag" ? ragRows : chatSessions;
 
   if (
     paginationInput.didNormalizeInput ||
-    ragRows.pagination.page !== paginationInput.page ||
-    (rawDays != null && String(days) !== rawDays)
+    activeData.pagination.page !== paginationInput.page ||
+    (rawTab != null && rawTab !== tab)
   ) {
     redirect(
       buildTelemetryHref(params, {
-        days: String(days),
-        page: String(ragRows.pagination.page),
-        pageSize: String(ragRows.pagination.pageSize),
+        page: String(activeData.pagination.page),
+        pageSize: String(activeData.pagination.pageSize),
+        tab: tab === DEFAULT_TELEMETRY_TAB ? undefined : tab,
       })
     );
   }
 
   return (
     <PageShell
-      actions={
-        <>
-          <Link
-            className={getActionClassName(days === 7)}
-            href={buildTelemetryHref(params, {
-              days: "7",
-              page: "1",
-              pageSize: String(ragRows.pagination.pageSize),
-            })}
-          >
-            7 days
-          </Link>
-          <Link
-            className={getActionClassName(days === 30)}
-            href={buildTelemetryHref(params, {
-              days: "30",
-              page: "1",
-              pageSize: String(ragRows.pagination.pageSize),
-            })}
-          >
-            30 days
-          </Link>
-          <Link
-            className={getActionClassName(days === 90)}
-            href={buildTelemetryHref(params, {
-              days: "90",
-              page: "1",
-              pageSize: String(ragRows.pagination.pageSize),
-            })}
-          >
-            90 days
-          </Link>
-        </>
-      }
-      description="Derived operational telemetry from the current chat, artifact, and campaign tables without adding a separate telemetry backend."
-      title="Telemetry"
+      description="Detailed platform usage audit for token interactions and pipeline execution."
+      title="Platform Telemetry"
     >
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <StatCard
-          hint="All assistant and user messages in range"
-          label="Messages"
-          value={String(telemetry.totals.messages)}
-        />
-        <StatCard
-          hint={`${telemetry.totals.assistantMessages} assistant / ${telemetry.totals.userMessages} user`}
-          label="Chats"
-          value={String(telemetry.totals.chats)}
-        />
-        <StatCard
-          hint={`${telemetry.totals.sentCampaigns} sent in range`}
-          label="Campaigns"
-          value={String(telemetry.totals.campaigns)}
-        />
-        <StatCard
-          hint="Document revisions created in range"
-          label="Documents"
-          value={String(telemetry.totals.documents)}
-        />
-        <StatCard
-          hint="Recipient deliveries recorded via SES"
-          label="Email Sends"
-          value={String(telemetry.totals.emailDeliveries)}
-        />
-        <StatCard
-          hint="Recipient sends that failed"
-          label="Email Failures"
-          value={String(telemetry.totals.emailFailures)}
-        />
-        <StatCard
-          hint={`Chat ${aiCost.chatCost.toFixed(6)} • RAG ${aiCost.ragCost.toFixed(6)}`}
-          label="Estimated AI Cost"
-          value={`$${aiCost.totalCost.toFixed(6)}`}
-        />
-        <StatCard
-          hint={`${ragSummary.queryEmbedCount} query embeddings / ${ragSummary.documentEmbedCount} document embeddings`}
-          label="RAG Tokens"
-          value={String(ragSummary.totalTokens)}
-        />
-        <StatCard
-          hint="Merged semantic + lexical retrieval operations"
-          label="RAG Retrievals"
-          value={String(ragSummary.retrievalCount)}
-        />
-      </div>
+      <TelemetrySummaryCards cost={cost} rag={ragSummary} summary={summary} />
 
-      <div className="mt-6 rounded-3xl border border-border/40 bg-card/60 p-5 shadow-[var(--shadow-card)]">
-        <div className="mb-4 text-sm font-semibold">
-          Activity Trend ({telemetry.days} days)
+      <div className="mt-8 overflow-hidden rounded-2xl border border-border/40 bg-card/60 shadow-[var(--shadow-card)]">
+        <div className="flex items-center justify-between border-b border-border/30 px-6">
+          <TelemetryTabs
+            currentTab={tab}
+            pageSize={TELEMETRY_PAGE_SIZE}
+            searchParams={params}
+          />
+          <div className="hidden sm:flex items-center gap-4 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/40">
+             <span>{activeData.pagination.total} Records Found</span>
+          </div>
         </div>
-        <div className="space-y-3">
-          {telemetry.series.map((bucket) => (
-            <div
-              className="grid grid-cols-[110px_repeat(4,minmax(0,1fr))] gap-3 text-sm"
-              key={bucket.key}
-            >
-              <div className="text-muted-foreground">{bucket.label}</div>
-              <div className="rounded-xl bg-background/70 px-3 py-2">
-                {bucket.messages} messages
-              </div>
-              <div className="rounded-xl bg-background/70 px-3 py-2">
-                {bucket.chats} chats
-              </div>
-              <div className="rounded-xl bg-background/70 px-3 py-2">
-                {bucket.documents} docs
-              </div>
-              <div className="rounded-xl bg-background/70 px-3 py-2">
-                {bucket.campaigns} campaigns
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      <div className="mt-6 rounded-3xl border border-border/40 bg-card/60 p-5 shadow-[var(--shadow-card)]">
-        <div className="mb-4 text-sm font-semibold">RAG Operations</div>
-        <div className="space-y-3">
-          {ragRows.items.length === 0 ? (
-            <div className="rounded-2xl bg-background/70 px-4 py-3 text-sm text-muted-foreground">
-              No RAG operations recorded yet.
-            </div>
+        <div className="min-h-[400px]">
+          {tab === "rag" ? (
+            <TelemetryRagOperationsTable items={ragRows.items} />
           ) : (
-            ragRows.items.map((row) => (
-              <div
-                className="grid grid-cols-[1.2fr_0.9fr_0.8fr_0.8fr_0.9fr_1fr] gap-3 rounded-2xl bg-background/70 px-4 py-3 text-sm"
-                data-testid="rag-row"
-                key={row.id}
-              >
-                <div>
-                  <div className="font-medium">{row.source}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {row.model ?? "unknown model"}
-                  </div>
-                </div>
-                <div className="text-muted-foreground">
-                  {row.actorEmail ?? row.actorId ?? "system"}
-                </div>
-                <div>{row.chatId ?? "global"}</div>
-                <div>{row.promptTokens}</div>
-                <div>{row.totalTokens}</div>
-                <div className="text-xs text-muted-foreground">
-                  {new Date(row.createdAt).toLocaleString("en-US", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </div>
-              </div>
-            ))
+            <TelemetryChatSessionsTable items={chatSessions.items} />
           )}
         </div>
 
-        <WorkspacePagination
-          className="mt-4"
-          pagination={ragRows.pagination}
-          pathname="/telemetry"
-          searchParams={params}
-        />
+        <div className="border-t border-border/20 bg-muted/10 px-6 py-4">
+          <WorkspacePagination
+            pagination={activeData.pagination}
+            pathname="/telemetry"
+            searchParams={params}
+          />
+        </div>
+      </div>
+      
+      <div className="mt-6 flex flex-wrap gap-8 text-[11px] text-muted-foreground leading-relaxed">
+        <div className="flex items-center gap-2">
+           <div className="size-1.5 rounded-full bg-emerald-500/40" />
+           <span>Estimated Costs (~$0.01/1k tokens generic rate)</span>
+        </div>
+        <div className="flex items-center gap-2">
+           <div className="size-1.5 rounded-full bg-indigo-500/40" />
+           <span>Real-time Data Stream (Delayed ~5s)</span>
+        </div>
       </div>
     </PageShell>
   );

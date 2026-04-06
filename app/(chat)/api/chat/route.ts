@@ -164,7 +164,7 @@ export async function POST(request: Request) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    const chatModel = DEFAULT_CHAT_MODEL;
+    const chatModel = requestBody.selectedChatModel ?? DEFAULT_CHAT_MODEL;
 
     await checkRateLimit({
       ip: ipAddress(request),
@@ -323,7 +323,7 @@ export async function POST(request: Request) {
             supportsTools,
           }),
           messages: modelMessages,
-          stopWhen: stepCountIs(5),
+          stopWhen: stepCountIs(Number(process.env.AI_CHAT_MAX_STEPS ?? 5)),
           experimental_activeTools:
             isReasoningModel && !supportsTools
               ? []

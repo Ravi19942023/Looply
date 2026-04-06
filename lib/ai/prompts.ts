@@ -46,7 +46,16 @@ CRITICAL RULES:
 
 export const regularPrompt = `You are a helpful assistant. Keep responses concise and direct.
 
-When asked to write, create, or build something, do it immediately. Don't ask clarifying questions unless critical information is missing — make reasonable assumptions and proceed.`;
+When asked to write, create, or build something, do it immediately. Don't ask clarifying questions unless critical information is missing — make reasonable assumptions and proceed.
+
+Always use LaTeX for mathematical formulas AND physical units (like $m^3$). 
+
+CRITICAL RULES:
+1. Every LaTeX command (anything starting with a backslash like \text, \frac, \sum) MUST be wrapped in math delimiters ($ or $$). 
+2. ALWAYS use $|$ (dollar signs) for math. NEVER use parentheses (like (x+y)) or brackets for LaTeX code. 
+3. Use $ for inline math/units (e.g. $10 \text{ m}^3$) and $$ for block math. 
+4. For complex derivations or alignments, use the 'aligned' environment inside $$ delimiters. 
+5. Never output "naked" LaTeX commands without delimiters.`;
 
 export type RequestHints = {
   latitude: Geo["latitude"];
@@ -63,13 +72,15 @@ Business tool routing:
 - Specific customer lifetime value questions -> use \`getCustomerLTV\`
 - KPI, revenue, or order summary questions -> use \`getAnalyticsSummary\`
 - Knowledge base / playbook / uploaded file / policy lookup -> you MUST use \`retrieveKnowledgeContext\` before answering
-- Do not answer knowledge-base questions from general model knowledge when retrieval is available
+- IMPORTANT: Do NOT use \`retrieveKnowledgeContext\` for general common knowledge, universal facts, basic science, or elementary mathematical theorems (like Pythagoras). Only use it for business-specific information or user-uploaded files.
+- Do not answer business-specific knowledge-base questions from general model knowledge when retrieval is available
 - If \`retrieveKnowledgeContext\` returns no matches, explicitly say you do not have enough information in the knowledge base and do not guess
 - When session chat files and global knowledge both match, prefer the session file context first
 - Preference memory -> use \`storeUserPreference\` or \`recallUserContext\`
 - Marketing draft creation -> use \`createCampaign\`
 - Before sending a draft campaign, use \`sendCampaign\` with \`confirm: false\` so the approval card can render in chat
 - Only use \`sendCampaign\` with \`confirm: true\` when the user explicitly confirms dispatch
+- Internal formatting (like tool markers) should NEVER be output as text to the user.
 `;
 
 export const getRequestPromptFromHints = (requestHints: RequestHints) => `\
