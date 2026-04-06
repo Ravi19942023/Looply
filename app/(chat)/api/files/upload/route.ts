@@ -1,16 +1,20 @@
 import { put } from "@vercel/blob";
-import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/app/(auth)/auth";
+import { apiErrorMessages, jsonErrorResponse } from "@/lib/http/api-errors";
+import {
+  CHAT_IMAGE_UPLOAD_MAX_SIZE_BYTES,
+  isImageUploadType,
+} from "@/lib/uploads/policies";
 
 const FileSchema = z.object({
   file: z
     .instanceof(Blob)
-    .refine((file) => file.size <= 5 * 1024 * 1024, {
+    .refine((file) => file.size <= CHAT_IMAGE_UPLOAD_MAX_SIZE_BYTES, {
       message: "File size should be less than 5MB",
     })
-    .refine((file) => ["image/jpeg", "image/png"].includes(file.type), {
+    .refine((file) => isImageUploadType(file.type), {
       message: "File type should be JPEG or PNG",
     }),
 });
@@ -19,11 +23,11 @@ export async function POST(request: Request) {
   const session = await auth();
 
   if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonErrorResponse(apiErrorMessages.unauthorized, 401);
   }
 
   if (request.body === null) {
-    return new Response("Request body is empty", { status: 400 });
+    return jsonErrorResponse(apiErrorMessages.requestBodyEmpty, 400);
   }
 
   try {
@@ -31,7 +35,7 @@ export async function POST(request: Request) {
     const file = formData.get("file") as Blob;
 
     if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+      return jsonErrorResponse(apiErrorMessages.noFileUploaded, 400);
     }
 
     const validatedFile = FileSchema.safeParse({ file });
@@ -41,7 +45,7 @@ export async function POST(request: Request) {
         .map((error) => error.message)
         .join(", ");
 
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
+      return jsonErrorResponse(errorMessage, 400);
     }
 
     const filename = (formData.get("file") as File).name;
@@ -55,19 +59,16 @@ export async function POST(request: Request) {
         addRandomSuffix: false,
       });
 
-      return NextResponse.json({
+      return Response.json({
         url: data.downloadUrl,
         pathname: data.pathname,
         contentType: data.contentType,
         storageUrl: data.url,
       });
     } catch (_error) {
-      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+      return jsonErrorResponse(apiErrorMessages.uploadFailed, 500);
     }
   } catch (_error) {
-    return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 500 }
-    );
+    return jsonErrorResponse(apiErrorMessages.failedToProcessRequest, 500);
   }
 }

@@ -209,7 +209,7 @@ export function KnowledgeBaseManager({ canManage }: { canManage: boolean }) {
               Read-only for your role
             </div>
           )}
-          {uploadStatus !== "idle" ? (
+          {uploadStatus === "idle" ? null : (
             <div className="mt-5 w-full max-w-xs">
               <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
                 <span className="capitalize">{uploadStatus}</span>
@@ -222,7 +222,7 @@ export function KnowledgeBaseManager({ canManage }: { canManage: boolean }) {
                 />
               </div>
             </div>
-          ) : null}
+          )}
         </button>
 
         <div className="rounded-3xl border border-border/40 bg-card/60 p-4 shadow-[var(--shadow-card)]">

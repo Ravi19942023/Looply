@@ -1,4 +1,4 @@
-import type { UserType } from "@/app/(auth)/auth";
+import type { UserRole } from "@/lib/auth/types";
 
 type Entitlements = {
   maxMessagesPerHour: number;
@@ -17,7 +17,7 @@ function getMaxMessagesPerHour() {
   return parsedValue;
 }
 
-export const entitlementsByUserType: Record<UserType, Entitlements> = {
+export const entitlementsByUserType: Record<UserRole, Entitlements> = {
   admin: {
     maxMessagesPerHour: getMaxMessagesPerHour(),
   },

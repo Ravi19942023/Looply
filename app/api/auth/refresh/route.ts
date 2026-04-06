@@ -28,7 +28,6 @@ export async function POST(request: NextRequest) {
     email: user.email,
     name: user.name ?? null,
     role: (user.role as "admin" | "manager" | "viewer") ?? "manager",
-    type: (user.role as "admin" | "manager" | "viewer") ?? "manager",
   });
 
   const response = NextResponse.json(
@@ -38,7 +37,6 @@ export async function POST(request: NextRequest) {
         email: user.email,
         name: user.name ?? null,
         role: (user.role as "admin" | "manager" | "viewer") ?? "manager",
-        type: (user.role as "admin" | "manager" | "viewer") ?? "manager",
       },
     },
     { status: 200 }

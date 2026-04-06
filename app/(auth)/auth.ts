@@ -4,7 +4,7 @@ import {
   getCurrentSessionFromCookies,
 } from "@/lib/auth/server";
 
-export type UserType = "admin" | "manager" | "viewer";
+export type { UserRole as UserType } from "@/lib/auth/types";
 
 export async function auth() {
   const cookieStore = await cookies();

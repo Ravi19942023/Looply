@@ -53,7 +53,6 @@ export async function authenticateCredentials(
     email: user.email,
     name: user.name ?? null,
     role: (user.role as AuthUser["role"]) ?? "manager",
-    type: (user.role as AuthUser["type"]) ?? "manager",
   };
 
   const tokens = await createAuthSession(authUser);

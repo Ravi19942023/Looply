@@ -4,9 +4,9 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import {
   createUrlSearchParams,
+  getSearchParamValue,
   type PaginationMeta,
   type SearchParams,
-  getSearchParamValue,
 } from "@/lib/pagination";
 import { cn } from "@/lib/utils";
 

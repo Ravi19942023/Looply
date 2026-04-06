@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Input } from "@/components/ui/input";
-import { WorkspacePagination } from "@/components/workspace/workspace-pagination";
 import { PageShell } from "@/components/workspace/page-shell";
+import { WorkspacePagination } from "@/components/workspace/workspace-pagination";
 import { getPaginatedCustomerDirectory } from "@/lib/db/queries";
 import {
   createUrlSearchParams,

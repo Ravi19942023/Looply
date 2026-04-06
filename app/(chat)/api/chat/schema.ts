@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHAT_MESSAGE_FILE_CONTENT_TYPES } from "@/lib/uploads/policies";
 
 const textPartSchema = z.object({
   type: z.enum(["text"]),
@@ -7,14 +8,7 @@ const textPartSchema = z.object({
 
 const filePartSchema = z.object({
   type: z.enum(["file"]),
-  mediaType: z.enum([
-    "image/jpeg",
-    "image/png",
-    "application/pdf",
-    "text/plain",
-    "text/markdown",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ]),
+  mediaType: z.enum(CHAT_MESSAGE_FILE_CONTENT_TYPES),
   name: z.string().min(1).max(100),
   url: z.string().url(),
 });

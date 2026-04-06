@@ -1,21 +1,23 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 async function loginAsAdmin(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill("admin@looply.ai");
   await page.getByLabel("Password").fill("password123");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15_000 });
 }
 
-async function uploadKnowledgeDocument(page: Page, name: string, content: string) {
-  await page
-    .locator('input[type="file"]')
-    .setInputFiles({
-      buffer: Buffer.from(content, "utf8"),
-      mimeType: "text/plain",
-      name,
-    });
+async function uploadKnowledgeDocument(
+  page: Page,
+  name: string,
+  content: string
+) {
+  await page.locator('input[type="file"]').setInputFiles({
+    buffer: Buffer.from(content, "utf8"),
+    mimeType: "text/plain",
+    name,
+  });
 }
 
 test.describe("Workspace pagination", () => {
@@ -46,19 +48,28 @@ test.describe("Workspace pagination", () => {
       /\/customers\?page=2&pageSize=1&segment=enterprise&sort=churn/
     );
 
-    const secondPageText = await page.getByTestId("customer-row").first().textContent();
+    const secondPageText = await page
+      .getByTestId("customer-row")
+      .first()
+      .textContent();
     expect(secondPageText).not.toEqual(firstPageText);
   });
 
   test("campaigns keep status filter while paging", async ({ page }) => {
     await page.goto("/campaigns?status=draft&page=1&pageSize=1");
 
-    const firstCardText = await page.getByTestId("campaign-card").first().textContent();
+    const firstCardText = await page
+      .getByTestId("campaign-card")
+      .first()
+      .textContent();
 
     await page.getByTestId("pagination-next").click();
     await expect(page).toHaveURL(/\/campaigns\?status=draft&page=2&pageSize=1/);
 
-    const secondCardText = await page.getByTestId("campaign-card").first().textContent();
+    const secondCardText = await page
+      .getByTestId("campaign-card")
+      .first()
+      .textContent();
     expect(secondCardText).not.toEqual(firstCardText);
   });
 
@@ -91,12 +102,18 @@ test.describe("Workspace pagination", () => {
       .getByText("Messages")
       .locator("..")
       .textContent();
-    const firstRowText = await page.getByTestId("rag-row").first().textContent();
+    const firstRowText = await page
+      .getByTestId("rag-row")
+      .first()
+      .textContent();
 
     await page.getByTestId("pagination-next").click();
     await expect(page).toHaveURL(/\/telemetry\?days=90&page=2&pageSize=1/);
 
-    const secondRowText = await page.getByTestId("rag-row").first().textContent();
+    const secondRowText = await page
+      .getByTestId("rag-row")
+      .first()
+      .textContent();
     const summaryValueAfter = await page
       .getByText("Messages")
       .locator("..")
@@ -121,16 +138,20 @@ test.describe("Workspace pagination", () => {
       `${prefix} first knowledge document`
     );
     await expect(page).toHaveURL(/\/knowledge-base\?page=1&pageSize=1/, {
-      timeout: 30000,
+      timeout: 30_000,
     });
-    await expect(page.getByText(firstFileName)).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText(firstFileName)).toBeVisible({
+      timeout: 30_000,
+    });
 
     await uploadKnowledgeDocument(
       page,
       secondFileName,
       `${prefix} second knowledge document`
     );
-    await expect(page.getByText(secondFileName)).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText(secondFileName)).toBeVisible({
+      timeout: 30_000,
+    });
 
     await page.goto(
       `/knowledge-base?q=${encodeURIComponent(prefix)}&page=1&pageSize=1`
@@ -149,7 +170,7 @@ test.describe("Workspace pagination", () => {
       new RegExp(
         `/knowledge-base\\?q=${encodeURIComponent(prefix)}&page=1&pageSize=1`
       ),
-      { timeout: 30000 }
+      { timeout: 30_000 }
     );
     await expect(page.getByText(secondFileName)).not.toBeVisible();
   });

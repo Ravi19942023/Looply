@@ -19,6 +19,10 @@ import {
 import { toast } from "sonner";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import type { Attachment, ChatMessage } from "@/lib/types";
+import {
+  isImageUploadType,
+  isSessionDocumentType,
+} from "@/lib/uploads/policies";
 import { cn } from "@/lib/utils";
 import {
   PromptInput,
@@ -217,14 +221,8 @@ function PureMultimodalInput({
 
   const uploadFile = useCallback(
     async (file: File) => {
-      const isImage = file.type.startsWith("image/");
-      const isSessionDocument =
-        [
-          "application/pdf",
-          "text/plain",
-          "text/markdown",
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ].includes(file.type) || file.name.toLowerCase().endsWith(".md");
+      const isImage = isImageUploadType(file.type);
+      const isSessionDocument = isSessionDocumentType(file);
 
       const formData = new FormData();
       formData.append("file", file);

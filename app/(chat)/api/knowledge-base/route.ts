@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
 import { canManageKnowledgeBase } from "@/lib/auth/permissions";
+import { apiErrorMessages, jsonErrorResponse } from "@/lib/http/api-errors";
 import { normalizePaginationInput } from "@/lib/pagination";
 import {
   getPaginatedKnowledgeDocuments,
   uploadKnowledgeDocument,
 } from "@/lib/rag/service";
+import { DEFAULT_UPLOAD_CONTENT_TYPE } from "@/lib/uploads/policies";
 
 export async function GET(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonErrorResponse(apiErrorMessages.unauthorized, 401);
   }
 
   const { searchParams } = new URL(request.url);
@@ -35,24 +37,24 @@ export async function POST(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonErrorResponse(apiErrorMessages.unauthorized, 401);
   }
 
   const formData = await request.formData();
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    return jsonErrorResponse(apiErrorMessages.noFileUploaded, 400);
   }
 
   if (!canManageKnowledgeBase(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return jsonErrorResponse(apiErrorMessages.forbidden, 403);
   }
 
   try {
     const document = await uploadKnowledgeDocument({
       actorId: session.user.id,
-      contentType: file.type || "text/plain",
+      contentType: file.type || DEFAULT_UPLOAD_CONTENT_TYPE,
       file,
     });
 

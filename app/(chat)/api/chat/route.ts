@@ -192,7 +192,7 @@ export async function POST(request: Request) {
       if (chat.userId !== session.user.id) {
         return new ChatbotError("forbidden:chat").toResponse();
       }
-      const chatHistoryLimit = parseInt(
+      const chatHistoryLimit = Number.parseInt(
         process.env.CHAT_HISTORY_LIMIT ?? "30",
         10
       );

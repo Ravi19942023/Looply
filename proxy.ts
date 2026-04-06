@@ -49,7 +49,6 @@ export async function proxy(request: NextRequest) {
             email: dbUser.email,
             name: dbUser.name ?? null,
             role: (dbUser.role as "admin" | "manager" | "viewer") ?? "manager",
-            type: (dbUser.role as "admin" | "manager" | "viewer") ?? "manager",
           });
           response.cookies.set("looply_access_token", tokens.accessToken, {
             httpOnly: true,

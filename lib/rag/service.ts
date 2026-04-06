@@ -1,7 +1,17 @@
 import { del, put } from "@vercel/blob";
-import { and, count, desc, eq, gte, ilike, or, sql as drizzleSql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  sql as drizzleSql,
+  eq,
+  gte,
+  ilike,
+  or,
+  type SQL,
+} from "drizzle-orm";
+import { rawClient as client, db } from "@/lib/db/client";
 import { createAuditLog, getChatById, saveChat } from "@/lib/db/queries";
-import { db, rawClient as client } from "@/lib/db/client";
 import {
   chatDocument,
   documentEmbedding,
@@ -176,7 +186,7 @@ export async function getPaginatedKnowledgeDocuments(params: {
   items: Awaited<ReturnType<typeof listKnowledgeDocuments>>;
   pagination: PaginationMeta;
 }> {
-  const filters = [];
+  const filters: SQL[] = [];
   const normalizedQuery = params.q?.trim();
 
   if (params.actorId) {
@@ -552,7 +562,9 @@ async function semanticGlobalMatches(params: {
     LIMIT ${Math.max(params.limit * 4, 20)}
   `;
 
-  return rows.filter((row: SemanticRow) => Number(row.score) >= params.minScore);
+  return rows.filter(
+    (row: SemanticRow) => Number(row.score) >= params.minScore
+  );
 }
 
 async function semanticSessionMatches(params: {
@@ -578,7 +590,9 @@ async function semanticSessionMatches(params: {
     LIMIT ${Math.max(params.limit * 4, 20)}
   `;
 
-  return rows.filter((row: SemanticRow) => Number(row.score) >= params.minScore);
+  return rows.filter(
+    (row: SemanticRow) => Number(row.score) >= params.minScore
+  );
 }
 
 async function lexicalGlobalMatches(params: {

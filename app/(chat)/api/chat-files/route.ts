@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
+import { apiErrorMessages, jsonErrorResponse } from "@/lib/http/api-errors";
 import { listChatDocuments, uploadChatDocument } from "@/lib/rag/service";
+import { DEFAULT_UPLOAD_CONTENT_TYPE } from "@/lib/uploads/policies";
 
 export async function GET(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonErrorResponse(apiErrorMessages.unauthorized, 401);
   }
 
   const { searchParams } = new URL(request.url);
@@ -28,7 +30,7 @@ export async function POST(request: Request) {
   const session = await auth();
 
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonErrorResponse(apiErrorMessages.unauthorized, 401);
   }
 
   const { searchParams } = new URL(request.url);
@@ -42,14 +44,14 @@ export async function POST(request: Request) {
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    return jsonErrorResponse(apiErrorMessages.noFileUploaded, 400);
   }
 
   try {
     const document = await uploadChatDocument({
       actorId: session.user.id,
       chatId,
-      contentType: file.type || "text/plain",
+      contentType: file.type || DEFAULT_UPLOAD_CONTENT_TYPE,
       file,
     });
 
