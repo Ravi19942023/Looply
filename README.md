@@ -1,71 +1,386 @@
-<a href="https://chatbot.ai-sdk.dev/demo">
-  <img alt="Chatbot" src="app/(chat)/opengraph-image.png">
-  <h1 align="center">Chatbot</h1>
-</a>
+# `chatbot-main`
 
-<p align="center">
-    Chatbot (formerly AI Chatbot) is a free, open-source template built with Next.js and the AI SDK that helps you quickly build powerful chatbot applications.
-</p>
+`chatbot-main` is the current productized workspace built on top of the original AI chatbot template. It now includes:
 
-<p align="center">
-  <a href="https://chatbot.ai-sdk.dev/docs"><strong>Read Docs</strong></a> ·
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#model-providers"><strong>Model Providers</strong></a> ·
-  <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
-</p>
-<br/>
+- a protected Looply-style workspace shell
+- assistant chat with artifacts and tool calling
+- dashboard, customers, campaigns, knowledge base, telemetry, and system-log pages
+- local JWT cookie auth
+- seeded business/demo data
+- knowledge-base uploads and session file uploads
+- pgvector-backed RAG retrieval and RAG telemetry
 
-## Features
+This README is for the current repo state, not the original template.
 
-- [Next.js](https://nextjs.org) App Router
-  - Advanced routing for seamless navigation and performance
-  - React Server Components (RSCs) and Server Actions for server-side rendering and increased performance
-- [AI SDK](https://ai-sdk.dev/docs/introduction)
-  - Unified API for generating text, structured objects, and tool calls with LLMs
-  - Hooks for building dynamic chat and generative user interfaces
-  - Supports OpenAI, Anthropic, Google, xAI, and other model providers via AI Gateway
-- [shadcn/ui](https://ui.shadcn.com)
-  - Styling with [Tailwind CSS](https://tailwindcss.com)
-  - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
-- Data Persistence
-  - [Neon Serverless Postgres](https://vercel.com/marketplace/neon) for saving chat history and user data
-  - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
-- [Auth.js](https://authjs.dev)
-  - Simple and secure authentication
+---
 
-## Model Providers
+## Stack
 
-This template uses the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) to access multiple AI models through a unified interface. Models are configured in `lib/ai/models.ts` with per-model provider routing. Included models: Mistral, Moonshot, DeepSeek, OpenAI, and xAI.
+- Next.js 16 App Router
+- React 19
+- Vercel AI SDK
+- Postgres + Drizzle ORM
+- `pgvector`
+- Vercel Blob
+- local JWT cookie auth
+- Tailwind + shadcn/ui
 
-### AI Gateway Authentication
+---
 
-**For Vercel deployments**: Authentication is handled automatically via OIDC tokens.
+## App Routes
 
-**For non-Vercel deployments**: You need to provide an AI Gateway API key by setting the `AI_GATEWAY_API_KEY` environment variable in your `.env.local` file.
+Protected workspace routes:
 
-With the [AI SDK](https://ai-sdk.dev/docs/introduction), you can also switch to direct LLM providers like [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://ai-sdk.dev/providers/ai-sdk-providers) with just a few lines of code.
+- `/dashboard`
+- `/assistant`
+- `/assistant/[id]`
+- `/customers`
+- `/campaigns`
+- `/knowledge-base`
+- `/telemetry`
+- `/system-logs`
 
-## Deploy Your Own
+Compatibility routes:
 
-You can deploy your own version of Chatbot to Vercel with one click:
+- `/` redirects into the protected workspace shell
+- `/chat/[id]` remains as a compatibility alias and redirects to `/assistant/[id]`
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/templates/next.js/chatbot)
+Auth routes:
 
-## Running locally
+- `/login`
+- `/register`
 
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
+---
 
-> Note: You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various AI and authentication provider accounts.
+## Architecture
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Link local instance with Vercel and GitHub accounts (creates `.vercel` directory): `vercel link`
-3. Download your environment variables: `vercel env pull`
+```text
+app/
+  (auth)/              login/register UI and auth actions
+  (chat)/              protected workspace routes, chat APIs, app pages
+components/
+  chat/                assistant UI, message rendering, artifacts, tool cards
+  workspace/           protected shell, sidebar, page shells, page widgets
+  ui/                  shared primitives
+hooks/
+  use-active-chat      assistant chat state and transport wiring
+lib/
+  ai/                  models, prompts, tools, provider wiring
+  auth/                JWT cookie auth helpers
+  db/                  schema, queries, migrations, seed
+  rag/                 parsing, chunking, embeddings, retrieval, telemetry
+```
+
+Key runtime flow:
+
+1. User signs in with local JWT auth.
+2. Protected workspace shell renders compact Looply-style navigation.
+3. Assistant requests hit `app/(chat)/api/chat/route.ts`.
+4. The AI SDK model can call business tools, artifact tools, and RAG retrieval.
+5. Knowledge retrieval uses:
+   - global knowledge-base documents
+   - session chat files
+   - session documents are prioritized over global docs when both match
+6. Assistant UI renders explicit tool cards, artifact previews, and campaign approval/send flows.
+
+---
+
+## Database Model
+
+Current schema includes:
+
+- auth and chat:
+  - `User`
+  - `Chat`
+  - `Message_v2`
+  - `Vote_v2`
+  - `Stream`
+- artifacts:
+  - `Document`
+  - `Suggestion`
+- business data:
+  - `Customer`
+  - `CustomerMetric`
+  - `Product`
+  - `Transaction`
+  - `Campaign`
+  - `CampaignLog`
+  - `UserMemory`
+- knowledge and retrieval:
+  - `KnowledgeDocument`
+  - `ChatDocument`
+  - `DocumentEmbedding`
+  - `RagTelemetryLog`
+
+`KnowledgeDocument` contains curated docs and uploaded global docs.
+
+`ChatDocument` contains chat/session files uploaded inside a specific assistant conversation.
+
+`DocumentEmbedding` stores chunk text plus embeddings in `pgvector`.
+
+`RagTelemetryLog` tracks embedding and retrieval operations.
+
+---
+
+## Knowledge Base and RAG
+
+### Global knowledge-base uploads
+
+Supported:
+
+- PDF
+- DOCX
+- TXT
+
+Flow:
+
+1. upload file from `/knowledge-base`
+2. write blob to Vercel Blob
+3. extract text
+4. preprocess text
+5. chunk text
+6. embed chunks
+7. store metadata in `KnowledgeDocument`
+8. store vectors in `DocumentEmbedding`
+
+### Session chat files
+
+Supported:
+
+- PDF
+- DOCX
+- TXT
+- Markdown
+- image uploads still work separately for multimodal chat
+
+Flow:
+
+1. upload file inside assistant composer
+2. route to `/api/chat-files`
+3. store in Blob
+4. extract + preprocess + chunk + embed
+5. persist to `ChatDocument`
+6. persist vectors to `DocumentEmbedding` under chat namespace
+
+### Retrieval behavior
+
+Knowledge retrieval uses:
+
+- semantic search over embeddings
+- lexical fallback over stored content
+- merged ranking
+- session-first priority when both session and global docs match
+
+The chat prompt is configured so knowledge questions should use retrieval instead of answering from generic model knowledge.
+
+If retrieval returns no relevant context, the assistant should say it does not have enough information in the knowledge base.
+
+---
+
+## Telemetry
+
+The telemetry page includes:
+
+- chat/message/document/campaign activity summaries
+- RAG token totals
+- query embedding count
+- document embedding count
+- retrieval count
+- detailed RAG operation rows with:
+  - source
+  - model
+  - actor
+  - chat linkage
+  - token counts
+  - timestamp
+
+RAG telemetry rows are written to `RagTelemetryLog`.
+
+---
+
+## Seeded Accounts
+
+After running `pnpm run db:seed`, these accounts are created/reset:
+
+- admin:
+  - email: `admin@looply.ai`
+  - password: `password123`
+- manager:
+  - email: `manager@looply.ai`
+  - password: `password123`
+- viewer:
+  - email: `viewer@looply.ai`
+  - password: `password123`
+
+Primary local login:
+
+- email: `admin@looply.ai`
+- password: `password123`
+
+---
+
+## Seeded Demo Data
+
+The seed currently creates:
+
+- 80 customers
+- 20 products
+- 600 transactions
+- multiple campaigns and campaign logs
+- user memory profiles
+- curated knowledge documents
+
+RAG telemetry rows and uploaded document rows are not faked by seed. Those are created by real app usage.
+
+---
+
+## Environment Variables
+
+Start from `.env.example`.
+
+Required or commonly used values:
+
+```bash
+AUTH_SECRET=
+AI_GATEWAY_API_KEY=
+BLOB_READ_WRITE_TOKEN=
+POSTGRES_URL=
+REDIS_URL=
+CHAT_MAX_MESSAGES_PER_HOUR=1000
+```
+
+Also supported:
+
+```bash
+IS_DEMO=0
+RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
+```
+
+Notes:
+
+- `POSTGRES_URL` must point to a Postgres instance with `pgvector` available.
+- Blob uploads currently assume a private Blob store and use private access.
+- `REDIS_URL` is optional for resumable stream support; the app can still run without it.
+
+---
+
+## Step-by-Step Local Setup
+
+1. Install dependencies:
 
 ```bash
 pnpm install
-pnpm db:migrate # Setup database or apply latest database changes
+```
+
+2. Create your environment file:
+
+```bash
+copy .env.example .env
+```
+
+3. Fill in at least:
+
+```bash
+AUTH_SECRET=...
+AI_GATEWAY_API_KEY=...
+BLOB_READ_WRITE_TOKEN=...
+POSTGRES_URL=...
+CHAT_MAX_MESSAGES_PER_HOUR=1000
+```
+
+4. Apply database migrations:
+
+```bash
+pnpm db:migrate
+```
+
+5. Seed local data:
+
+```bash
+pnpm run db:seed
+```
+
+6. Start the dev server:
+
+```bash
 pnpm dev
 ```
 
-Your app template should now be running on [localhost:3000](http://localhost:3000).
+7. Open:
+
+```text
+http://localhost:3000
+```
+
+8. Log in with:
+
+```text
+admin@looply.ai
+password123
+```
+
+---
+
+## Common Commands
+
+```bash
+pnpm dev
+pnpm build
+pnpm start
+pnpm db:migrate
+pnpm db:seed
+pnpm db:generate
+pnpm db:push
+pnpm exec tsc --noEmit
+pnpm exec next build
+pnpm test
+```
+
+---
+
+## Upload Notes
+
+Knowledge base uploads:
+
+- use the Knowledge Base page
+- uploaded docs become globally retrievable if `inContext` is enabled
+
+Assistant session files:
+
+- upload from the assistant composer
+- these files are scoped to the current chat
+- session files should outrank global docs during retrieval
+
+Image uploads:
+
+- still use the existing image upload path
+- separate from document ingestion
+
+---
+
+## Current Constraints
+
+- customer/campaign/dashboard pages are first-pass workspace pages, not full Looply CRUD parity yet
+- knowledge retrieval is implemented, but quality still depends on the uploaded document corpus and embedding quality
+- chat knowledge answers are only as good as the indexed knowledge actually present
+- full external integration/settings parity with Looply is still out of scope
+
+---
+
+## Verification
+
+Current repo verification commands used during migration work:
+
+```bash
+pnpm exec tsc --noEmit
+pnpm exec next build
+pnpm run db:seed
+```
+
+If you change schema or RAG code, rerun:
+
+```bash
+pnpm db:migrate
+pnpm run db:seed
+pnpm exec next build
+```
