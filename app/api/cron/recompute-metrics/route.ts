@@ -10,7 +10,7 @@ import {
   updateJobRun,
 } from "@/lib/db/queries";
 
-export async function POST(req: NextRequest): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const secret = process.env.CRON_SECRET;
   const session = await auth();
 
@@ -119,3 +119,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 }
+
+/** Backward-compatible alias for manual invocations */
+export const POST = GET;

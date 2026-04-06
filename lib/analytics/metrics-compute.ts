@@ -1,12 +1,8 @@
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@/lib/db/client";
 
 const CHURN_CENTER_DAYS = 60;
 const CHURN_STEEPNESS = 15;
-
-const client = postgres(process.env.POSTGRES_URL ?? "");
-const db = drizzle(client);
 
 export type MetricsComputeResult = {
   processed: number;
@@ -51,7 +47,8 @@ export async function recomputeCustomerMetrics(): Promise<MetricsComputeResult> 
     SELECT
       "customerId",
       total_revenue,
-      total_revenue AS ltv,
+      -- LTV = avg_order_value × monthly_frequency × 12 (projected annual value)
+      (avg_order_value * (order_count / months_active) * 12)::numeric(12, 2) AS ltv,
       order_count,
       avg_order_value,
       last_purchase_at,

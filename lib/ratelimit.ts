@@ -3,7 +3,7 @@ import { createClient } from "redis";
 import { isProductionEnvironment } from "@/lib/constants";
 import { ChatbotError } from "@/lib/errors";
 
-const MAX_MESSAGES = 10;
+const DEFAULT_MAX_MESSAGES = 10;
 const TTL_SECONDS = 60 * 60;
 
 let client: ReturnType<typeof createClient> | null = null;
@@ -19,7 +19,19 @@ function getClient() {
   return client;
 }
 
-export async function checkIpRateLimit(ip: string | undefined) {
+/**
+ * Rate-limit by a composite key of userId + IP.
+ * Falls back to IP-only when no userId is available.
+ */
+export async function checkRateLimit({
+  ip,
+  userId,
+  maxMessages = DEFAULT_MAX_MESSAGES,
+}: {
+  ip: string | undefined;
+  userId?: string | null;
+  maxMessages?: number;
+}) {
   if (!isProductionEnvironment || !ip) {
     return;
   }
@@ -29,15 +41,17 @@ export async function checkIpRateLimit(ip: string | undefined) {
     return;
   }
 
+  const scope = userId ? `user:${userId}` : `ip:${ip}`;
+  const key = `rate-limit:chat:${scope}`;
+
   try {
-    const key = `ip-rate-limit:${ip}`;
     const [count] = await redis
       .multi()
       .incr(key)
       .expire(key, TTL_SECONDS, "NX")
       .exec();
 
-    if (typeof count === "number" && count > MAX_MESSAGES) {
+    if (typeof count === "number" && count > maxMessages) {
       throw new ChatbotError("rate_limit:chat");
     }
   } catch (error) {

@@ -5,7 +5,6 @@ export type AuthUser = {
   id: string;
   name: string | null;
   role: UserRole;
-  type: UserRole;
 };
 
 export type AuthSession = {

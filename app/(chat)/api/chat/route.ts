@@ -50,7 +50,7 @@ import {
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import { retrieveKnowledgeContext as retrieveKnowledgeContextDirect } from "@/lib/rag/service";
-import { checkIpRateLimit } from "@/lib/ratelimit";
+import { checkRateLimit } from "@/lib/ratelimit";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
@@ -166,9 +166,12 @@ export async function POST(request: Request) {
 
     const chatModel = DEFAULT_CHAT_MODEL;
 
-    await checkIpRateLimit(ipAddress(request));
+    await checkRateLimit({
+      ip: ipAddress(request),
+      userId: session.user.id,
+    });
 
-    const userType: UserType = session.user.type;
+    const userType: UserType = session.user.role as UserType;
 
     const messageCount = await getMessageCountByUserId({
       id: session.user.id,
@@ -189,7 +192,14 @@ export async function POST(request: Request) {
       if (chat.userId !== session.user.id) {
         return new ChatbotError("forbidden:chat").toResponse();
       }
-      messagesFromDb = await getMessagesByChatId({ id });
+      const chatHistoryLimit = parseInt(
+        process.env.CHAT_HISTORY_LIMIT ?? "30",
+        10
+      );
+      messagesFromDb = await getMessagesByChatId({
+        id,
+        limit: chatHistoryLimit,
+      });
     } else if (message?.role === "user") {
       await saveChat({
         id,

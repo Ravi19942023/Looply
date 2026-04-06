@@ -1,8 +1,7 @@
 import { del, put } from "@vercel/blob";
 import { and, count, desc, eq, gte, ilike, or, sql as drizzleSql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import { createAuditLog, getChatById, saveChat } from "@/lib/db/queries";
+import { db, rawClient as client } from "@/lib/db/client";
 import {
   chatDocument,
   documentEmbedding,
@@ -24,9 +23,6 @@ import {
 import { embedText, embedTexts } from "./embeddings";
 import { extractText, isReadableExtractedText } from "./extract";
 import { TextPreprocessor } from "./text-preprocessor";
-
-const client = postgres(process.env.POSTGRES_URL ?? "");
-const db = drizzle(client);
 
 type RagScope = "global" | "session";
 
@@ -556,7 +552,7 @@ async function semanticGlobalMatches(params: {
     LIMIT ${Math.max(params.limit * 4, 20)}
   `;
 
-  return rows.filter((row) => Number(row.score) >= params.minScore);
+  return rows.filter((row: SemanticRow) => Number(row.score) >= params.minScore);
 }
 
 async function semanticSessionMatches(params: {
@@ -582,7 +578,7 @@ async function semanticSessionMatches(params: {
     LIMIT ${Math.max(params.limit * 4, 20)}
   `;
 
-  return rows.filter((row) => Number(row.score) >= params.minScore);
+  return rows.filter((row: SemanticRow) => Number(row.score) >= params.minScore);
 }
 
 async function lexicalGlobalMatches(params: {

@@ -103,6 +103,25 @@ erDiagram
 
 ---
 
+## 🧠 Memory Management
+
+Looply implements a tiered memory system to balance context-awareness with performance and cost.
+
+### 1. Short-Term Memory (Session Context)
+- **Mechanism**: Automatically maintains the N most recent messages in a conversation.
+- **Configuration**: Controlled by `CHAT_HISTORY_LIMIT` (Default: 30).
+- **Benefit**: Ensures the AI has enough context for multi-turn reasoning while preventing token window overflow.
+
+### 2. Long-Term Memory (User Intelligence)
+- **Mechanism**: Persists user preferences and business context across sessions in the `UserMemory` table.
+- **AI-Controlled**: The agent uses `storeUserPreference` to learn and `recallUserContext` to retrieve facts about the user's business and style.
+
+### 3. Knowledge Memory (RAG)
+- **Mechanism**: Semantic search across vectorized documents using `pgvector`.
+- **Hybrid Retrieval**: Combines automated pre-retrieval for detected intents and explicit tool-based search.
+
+---
+
 ## 📋 Implementation & JD Alignment
 
 This project was built to precisely fulfill the criteria of an AI Business Assistant POC, demonstrating production-grade engineering, robust AI orchestration, and proper architectural patterns.
@@ -184,6 +203,7 @@ Open [http://localhost:3000](http://localhost:3000) and login with:
 
 Refer to `.env.example` for the full list. Critical keys:
 - `POSTGRES_URL`: PostgreSQL connection string.
+- `CHAT_HISTORY_LIMIT`: Number of recent messages to send to the LLM (Default: 30).
 - `AI_GATEWAY_API_KEY`: API key for model access.
 - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`: For SES email delivery.
 - `CRON_SECRET`: To authorize background analytics jobs.
