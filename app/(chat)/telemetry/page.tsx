@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { PageShell } from "@/components/workspace/page-shell";
 import { StatCard } from "@/components/workspace/stat-card";
 import { WorkspacePagination } from "@/components/workspace/workspace-pagination";
-import { getTelemetryOverview } from "@/lib/db/queries";
+import { getAiCostSummary, getTelemetryOverview } from "@/lib/db/queries";
 import {
   createUrlSearchParams,
   getSearchParamValue,
@@ -56,7 +56,7 @@ export default async function Page({
     pageSize: getSearchParamValue(params.pageSize),
   });
 
-  const [telemetry, ragSummary, ragRows] = await Promise.all([
+  const [telemetry, ragSummary, ragRows, aiCost] = await Promise.all([
     getTelemetryOverview({ days }),
     getRagTelemetrySummary({ days }),
     getPaginatedRagTelemetryRows({
@@ -64,6 +64,7 @@ export default async function Page({
       page: paginationInput.page,
       pageSize: paginationInput.pageSize,
     }),
+    getAiCostSummary({ days }),
   ]);
 
   if (
@@ -149,6 +150,11 @@ export default async function Page({
           hint="Recipient sends that failed"
           label="Email Failures"
           value={String(telemetry.totals.emailFailures)}
+        />
+        <StatCard
+          hint={`Chat ${aiCost.chatCost.toFixed(6)} • RAG ${aiCost.ragCost.toFixed(6)}`}
+          label="Estimated AI Cost"
+          value={`$${aiCost.totalCost.toFixed(6)}`}
         />
         <StatCard
           hint={`${ragSummary.queryEmbedCount} query embeddings / ${ragSummary.documentEmbedCount} document embeddings`}

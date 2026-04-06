@@ -124,6 +124,7 @@ export function createAuthSession(user: AuthUser): {
     sub: user.id,
     email: user.email,
     name: user.name,
+    role: user.role,
     type: "access",
     exp: now + ACCESS_TOKEN_MAX_AGE,
   });
@@ -215,7 +216,8 @@ export async function getCurrentUserFromCookies(
     id: user.id,
     email: user.email,
     name: user.name ?? null,
-    type: "regular",
+    role: (user.role as AuthUser["role"]) ?? "manager",
+    type: (user.role as AuthUser["type"]) ?? "manager",
   };
 }
 
@@ -244,7 +246,8 @@ export async function getCurrentUserFromRequest(
     id: user.id,
     email: user.email,
     name: user.name ?? null,
-    type: "regular",
+    role: (user.role as AuthUser["role"]) ?? "manager",
+    type: (user.role as AuthUser["type"]) ?? "manager",
   };
 }
 
@@ -271,7 +274,8 @@ export async function refreshAccessTokenFromRequest(
     id: user.id,
     email: user.email,
     name: user.name ?? null,
-    type: "regular",
+    role: (user.role as AuthUser["role"]) ?? "manager",
+    type: (user.role as AuthUser["type"]) ?? "manager",
   };
 
   const tokens = createAuthSession(authUser);

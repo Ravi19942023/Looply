@@ -40,6 +40,7 @@ export const user = pgTable("User", {
   email: varchar("email", { length: 64 }).notNull(),
   password: varchar("password", { length: 64 }),
   name: text("name"),
+  role: varchar("role", { length: 20 }).notNull().default("manager"),
   emailVerified: boolean("emailVerified").notNull().default(false),
   image: text("image"),
   isAnonymous: boolean("isAnonymous").notNull().default(false),
@@ -282,6 +283,36 @@ export const emailLog = pgTable("EmailLog", {
 });
 
 export type EmailLog = InferSelectModel<typeof emailLog>;
+
+export const auditLog = pgTable("AuditLog", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  actorId: uuid("actorId").references(() => user.id),
+  event: varchar("event", { length: 100 }).notNull(),
+  resourceType: varchar("resourceType", { length: 50 }).notNull(),
+  resourceId: uuid("resourceId"),
+  metadata: json("metadata")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+  ipAddress: varchar("ipAddress", { length: 64 }),
+  userAgent: text("userAgent"),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export type AuditLog = InferSelectModel<typeof auditLog>;
+
+export const jobRun = pgTable("JobRun", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  jobName: varchar("jobName", { length: 100 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull(),
+  processedCount: integer("processedCount").notNull().default(0),
+  retryCount: integer("retryCount").notNull().default(0),
+  error: text("error"),
+  startedAt: timestamp("startedAt").notNull().defaultNow(),
+  finishedAt: timestamp("finishedAt"),
+});
+
+export type JobRun = InferSelectModel<typeof jobRun>;
 
 export const userMemory = pgTable("UserMemory", {
   userId: uuid("userId")

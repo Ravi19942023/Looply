@@ -19,10 +19,12 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { ArtifactKind } from "@/components/chat/artifact";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
+import { estimateAiCost } from "../ai/costs";
 import { ChatbotError } from "../errors";
 import { buildPaginationMeta, type PaginationMeta } from "../pagination";
 import { generateUUID } from "../utils";
 import {
+  auditLog,
   type Chat,
   campaign,
   campaignLog,
@@ -32,9 +34,11 @@ import {
   type DBMessage,
   document,
   emailLog,
+  jobRun,
   knowledgeDocument,
   message,
   product,
+  ragTelemetryLog,
   type Suggestion,
   stream,
   suggestion,
@@ -643,6 +647,181 @@ export async function createStreamId({
   }
 }
 
+export async function createAuditLog({
+  actorId,
+  event,
+  resourceType,
+  resourceId,
+  metadata = {},
+  ipAddress,
+  userAgent,
+}: {
+  actorId?: string | null;
+  event: string;
+  resourceType: string;
+  resourceId?: string | null;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}) {
+  try {
+    const [created] = await db
+      .insert(auditLog)
+      .values({
+        actorId: actorId ?? null,
+        event,
+        resourceType,
+        resourceId: resourceId ?? null,
+        metadata,
+        ipAddress: ipAddress ?? null,
+        userAgent: userAgent ?? null,
+        timestamp: new Date(),
+      })
+      .returning();
+
+    return created ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create audit log"
+    );
+  }
+}
+
+export async function createUsageLog({
+  actorId,
+  chatId,
+  source,
+  model,
+  promptTokens = 0,
+  completionTokens = 0,
+  totalTokens = 0,
+  metadata = {},
+}: {
+  actorId?: string | null;
+  chatId?: string | null;
+  source: string;
+  model?: string | null;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    const [created] = await db
+      .insert(ragTelemetryLog)
+      .values({
+        actorId: actorId ?? null,
+        chatId: chatId ?? null,
+        source,
+        model: model ?? null,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        metadata,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    return created ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create usage log"
+    );
+  }
+}
+
+export async function createJobRun({
+  jobName,
+  retryCount,
+}: {
+  jobName: string;
+  retryCount: number;
+}) {
+  try {
+    const [created] = await db
+      .insert(jobRun)
+      .values({
+        jobName,
+        status: "running",
+        processedCount: 0,
+        retryCount,
+        startedAt: new Date(),
+      })
+      .returning();
+
+    return created ?? null;
+  } catch (_error) {
+    throw new ChatbotError("bad_request:database", "Failed to create job run");
+  }
+}
+
+export async function getLatestRunningJob({ jobName }: { jobName: string }) {
+  try {
+    const [current] = await db
+      .select()
+      .from(jobRun)
+      .where(and(eq(jobRun.jobName, jobName), eq(jobRun.status, "running")))
+      .orderBy(desc(jobRun.startedAt))
+      .limit(1);
+
+    return current ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get latest running job"
+    );
+  }
+}
+
+export async function getLatestJobRun({ jobName }: { jobName: string }) {
+  try {
+    const [current] = await db
+      .select()
+      .from(jobRun)
+      .where(eq(jobRun.jobName, jobName))
+      .orderBy(desc(jobRun.startedAt))
+      .limit(1);
+
+    return current ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get latest job run"
+    );
+  }
+}
+
+export async function updateJobRun({
+  id,
+  status,
+  processedCount,
+  error,
+}: {
+  id: string;
+  status: "success" | "failed";
+  processedCount?: number;
+  error?: string | null;
+}) {
+  try {
+    const [updated] = await db
+      .update(jobRun)
+      .set({
+        status,
+        processedCount: processedCount ?? 0,
+        error: error ?? null,
+        finishedAt: new Date(),
+      })
+      .where(eq(jobRun.id, id))
+      .returning();
+
+    return updated ?? null;
+  } catch (_error) {
+    throw new ChatbotError("bad_request:database", "Failed to update job run");
+  }
+}
+
 export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
   try {
     const streamIds = await db
@@ -695,6 +874,40 @@ export async function getTopCustomers({ limit = 5 }: { limit?: number }) {
     throw new ChatbotError(
       "bad_request:database",
       "Failed to get top customers"
+    );
+  }
+}
+
+export async function getCustomerLTV({ customerId }: { customerId: string }) {
+  try {
+    const [result] = await db
+      .select({
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        segment: customer.segment,
+        tags: customer.tags,
+        totalRevenue: customerMetric.totalRevenue,
+        ltv: customerMetric.ltv,
+        orderCount: customerMetric.orderCount,
+        avgOrderValue: customerMetric.avgOrderValue,
+        lastPurchaseAt: customerMetric.lastPurchaseAt,
+        churnRiskScore: customerMetric.churnRiskScore,
+        recencyScore: customerMetric.recencyScore,
+        frequencyScore: customerMetric.frequencyScore,
+        monetaryScore: customerMetric.monetaryScore,
+      })
+      .from(customer)
+      .leftJoin(customerMetric, eq(customer.id, customerMetric.customerId))
+      .where(eq(customer.id, customerId))
+      .limit(1);
+
+    return result ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get customer LTV"
     );
   }
 }
@@ -1730,12 +1943,62 @@ export async function getTelemetryOverview({ days = 30 }: { days?: number }) {
   }
 }
 
+export async function getAiCostSummary({ days = 30 }: { days?: number }) {
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const logs = await db
+      .select()
+      .from(ragTelemetryLog)
+      .where(gte(ragTelemetryLog.createdAt, cutoff));
+
+    const chatCost = logs
+      .filter((entry) => entry.source === "llm:chat")
+      .reduce(
+        (sum, entry) =>
+          sum +
+          estimateAiCost({
+            model: entry.model,
+            promptTokens: entry.promptTokens,
+            completionTokens: entry.completionTokens,
+          }),
+        0
+      );
+
+    const ragCost = logs
+      .filter((entry) => entry.source.startsWith("rag:"))
+      .reduce(
+        (sum, entry) =>
+          sum +
+          estimateAiCost({
+            model: entry.model,
+            promptTokens: entry.promptTokens,
+            completionTokens: entry.completionTokens,
+          }),
+        0
+      );
+
+    return {
+      chatCost: Number(chatCost.toFixed(6)),
+      ragCost: Number(ragCost.toFixed(6)),
+      totalCost: Number((chatCost + ragCost).toFixed(6)),
+    };
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get AI cost summary"
+    );
+  }
+}
+
 export type SystemActivityType =
   | "all"
   | "campaign"
   | "chat"
   | "document"
   | "email"
+  | "job"
   | "knowledge"
   | "message";
 
@@ -1763,7 +2026,15 @@ export async function getSystemActivityFeed({
   try {
     const sourceTypes: Exclude<SystemActivityType, "all">[] =
       type === "all"
-        ? ["chat", "message", "document", "campaign", "email", "knowledge"]
+        ? [
+            "chat",
+            "message",
+            "document",
+            "campaign",
+            "email",
+            "knowledge",
+            "job",
+          ]
         : [type];
 
     const countEntries = await Promise.all(
@@ -1800,6 +2071,13 @@ export async function getSystemActivityFeed({
               .from(knowledgeDocument);
             return [sourceType, result?.count ?? 0] as const;
           }
+          case "job": {
+            const [result] = await db
+              .select({ count: count(auditLog.id) })
+              .from(auditLog)
+              .where(eq(auditLog.resourceType, "job"));
+            return [sourceType, result?.count ?? 0] as const;
+          }
           case "email": {
             const [result] = await db
               .select({ count: count(emailLog.id) })
@@ -1822,6 +2100,27 @@ export async function getSystemActivityFeed({
       sourceTypes.map(async (sourceType): Promise<SystemActivityEntry[]> => {
         switch (sourceType) {
           case "chat": {
+            const recentAuditChats = await db
+              .select()
+              .from(auditLog)
+              .where(eq(auditLog.resourceType, "chat"))
+              .orderBy(desc(auditLog.timestamp))
+              .limit(fetchLimit);
+
+            if (recentAuditChats.length > 0) {
+              return recentAuditChats.map((entry) => ({
+                createdAt: entry.timestamp,
+                description:
+                  (entry.metadata.deletedCount as number | undefined) != null
+                    ? `Deleted ${entry.metadata.deletedCount} chats`
+                    : String(entry.event),
+                href: "/assistant",
+                id: `audit-${entry.id}`,
+                title: entry.event,
+                type: "chat" as const,
+              }));
+            }
+
             const recentChats = await db
               .select({
                 id: chat.id,
@@ -1890,6 +2189,24 @@ export async function getSystemActivityFeed({
             }));
           }
           case "campaign": {
+            const recentAuditCampaigns = await db
+              .select()
+              .from(auditLog)
+              .where(eq(auditLog.resourceType, "campaign"))
+              .orderBy(desc(auditLog.timestamp))
+              .limit(fetchLimit);
+
+            if (recentAuditCampaigns.length > 0) {
+              return recentAuditCampaigns.map((entry) => ({
+                createdAt: entry.timestamp,
+                description: String(entry.metadata.provider ?? entry.event),
+                href: "/campaigns",
+                id: `audit-${entry.id}`,
+                title: entry.event,
+                type: "campaign" as const,
+              }));
+            }
+
             const recentCampaigns = await db
               .select({
                 activityAt: campaignActivityAt,
@@ -1912,6 +2229,24 @@ export async function getSystemActivityFeed({
             }));
           }
           case "knowledge": {
+            const recentAuditKnowledge = await db
+              .select()
+              .from(auditLog)
+              .where(eq(auditLog.resourceType, "knowledge"))
+              .orderBy(desc(auditLog.timestamp))
+              .limit(fetchLimit);
+
+            if (recentAuditKnowledge.length > 0) {
+              return recentAuditKnowledge.map((entry) => ({
+                createdAt: entry.timestamp,
+                description: String(entry.metadata.fileName ?? entry.event),
+                href: "/knowledge-base",
+                id: `audit-${entry.id}`,
+                title: entry.event,
+                type: "knowledge" as const,
+              }));
+            }
+
             const recentKnowledge = await db
               .select({
                 id: knowledgeDocument.id,
@@ -1929,6 +2264,23 @@ export async function getSystemActivityFeed({
               id: `knowledge-${entry.id}`,
               title: "Knowledge document updated",
               type: "knowledge" as const,
+            }));
+          }
+          case "job": {
+            const recentJobs = await db
+              .select()
+              .from(auditLog)
+              .where(eq(auditLog.resourceType, "job"))
+              .orderBy(desc(auditLog.timestamp))
+              .limit(fetchLimit);
+
+            return recentJobs.map((entry) => ({
+              createdAt: entry.timestamp,
+              description: String(entry.metadata.processed ?? entry.event),
+              href: "/telemetry",
+              id: `audit-${entry.id}`,
+              title: entry.event,
+              type: "job" as const,
             }));
           }
           case "email": {

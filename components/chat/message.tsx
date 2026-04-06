@@ -471,6 +471,7 @@ const PurePreviewMessage = ({
     }
 
     if (
+      type === "tool-getCustomerLTV" ||
       type === "tool-getTopCustomers" ||
       type === "tool-getChurnRiskCustomers" ||
       type === "tool-searchCustomers"
@@ -495,10 +496,39 @@ const PurePreviewMessage = ({
             title={
               type === "tool-getTopCustomers"
                 ? "Top Customers"
-                : type === "tool-getChurnRiskCustomers"
-                  ? "Churn Risk Customers"
-                  : "Customer Search Results"
+                : type === "tool-getCustomerLTV"
+                  ? "Customer LTV"
+                  : type === "tool-getChurnRiskCustomers"
+                    ? "Churn Risk Customers"
+                    : "Customer Search Results"
             }
+          />
+        );
+      }
+
+      if (
+        type === "tool-getCustomerLTV" &&
+        state === "output-available" &&
+        part.output &&
+        typeof part.output === "object" &&
+        !Array.isArray(part.output) &&
+        !("error" in part.output)
+      ) {
+        return (
+          <CustomerResultsCard
+            customers={[
+              part.output as {
+                avgOrderValue?: string | number | null;
+                email: string;
+                ltv?: string | number | null;
+                name: string;
+                orderCount?: number | null;
+                segment?: string | null;
+                totalRevenue?: string | number | null;
+              },
+            ]}
+            key={toolCallId}
+            title="Customer LTV"
           />
         );
       }
@@ -520,11 +550,13 @@ const PurePreviewMessage = ({
           key={toolCallId}
           state={state}
           title={
-            type === "tool-getTopCustomers"
-              ? "Top Customer Analysis"
-              : type === "tool-getChurnRiskCustomers"
-                ? "Churn Risk Scan"
-                : "Customer Search"
+            type === "tool-getCustomerLTV"
+              ? "Customer LTV"
+              : type === "tool-getTopCustomers"
+                ? "Top Customer Analysis"
+                : type === "tool-getChurnRiskCustomers"
+                  ? "Churn Risk Scan"
+                  : "Customer Search"
           }
         />
       );

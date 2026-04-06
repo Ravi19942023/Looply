@@ -24,6 +24,7 @@ import { createDocument } from "@/lib/ai/tools/create-document";
 import { editDocument } from "@/lib/ai/tools/edit-document";
 import { getAnalyticsSummaryTool } from "@/lib/ai/tools/get-analytics-summary";
 import { getChurnRiskCustomersTool } from "@/lib/ai/tools/get-churn-risk-customers";
+import { getCustomerLTVTool } from "@/lib/ai/tools/get-customer-ltv";
 import { getTopCustomersTool } from "@/lib/ai/tools/get-top-customers";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { recallUserContext } from "@/lib/ai/tools/recall-user-context";
@@ -36,6 +37,7 @@ import { updateDocument } from "@/lib/ai/tools/update-document";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
+  createUsageLog,
   deleteChatById,
   getChatById,
   getMessageCountByUserId,
@@ -318,6 +320,7 @@ export async function POST(request: Request) {
               : [
                   "getWeather",
                   "getTopCustomers",
+                  "getCustomerLTV",
                   "getChurnRiskCustomers",
                   "searchCustomers",
                   "getAnalyticsSummary",
@@ -352,6 +355,7 @@ export async function POST(request: Request) {
           tools: {
             getWeather,
             getTopCustomers: getTopCustomersTool,
+            getCustomerLTV: getCustomerLTVTool,
             getChurnRiskCustomers: getChurnRiskCustomersTool,
             searchCustomers: searchCustomersTool,
             getAnalyticsSummary: getAnalyticsSummaryTool,
@@ -383,6 +387,17 @@ export async function POST(request: Request) {
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: "stream-text",
+          },
+          onFinish: async ({ totalUsage }) => {
+            await createUsageLog({
+              actorId: session.user.id,
+              chatId: id,
+              source: "llm:chat",
+              model: chatModel,
+              promptTokens: totalUsage.inputTokens ?? 0,
+              completionTokens: totalUsage.outputTokens ?? 0,
+              totalTokens: totalUsage.totalTokens ?? 0,
+            });
           },
         });
 

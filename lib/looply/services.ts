@@ -1,4 +1,5 @@
 import {
+  createAuditLog,
   createCampaignDraft as createCampaignDraftRecord,
   createCampaignLogs,
   getAnalyticsSummary as getAnalyticsSummaryRecord,
@@ -49,10 +50,27 @@ export function createCampaignDraft(input: {
   segment: string;
   subject: string;
 }) {
-  return createCampaignDraftRecord(input);
+  return createCampaignDraftRecord(input).then(async (campaign) => {
+    await createAuditLog({
+      actorId: input.createdBy,
+      event: "campaign.created",
+      resourceType: "campaign",
+      resourceId: campaign.id,
+      metadata: {
+        segment: campaign.segment,
+        recipientCount: campaign.recipientCount,
+      },
+    });
+
+    return campaign;
+  });
 }
 
-export async function sendCampaignDraft(campaignId: string, confirm: boolean) {
+export async function sendCampaignDraft(
+  campaignId: string,
+  confirm: boolean,
+  actorId?: string
+) {
   const campaign = await getCampaignDraftById({ id: campaignId });
   if (!campaign) {
     return {
@@ -68,6 +86,15 @@ export async function sendCampaignDraft(campaignId: string, confirm: boolean) {
   }
 
   const emailService = new EmailService(createEmailAdapter());
+  await createAuditLog({
+    actorId: actorId ?? campaign.createdBy,
+    event: "campaign.send.attempted",
+    resourceType: "campaign",
+    resourceId: campaign.id,
+    metadata: {
+      recipientCount: campaign.recipientCount,
+    },
+  });
   const delivery = await emailService.send(
     {
       to: (campaign.recipients ?? []).map((recipient) => recipient.email),
@@ -98,6 +125,18 @@ export async function sendCampaignDraft(campaignId: string, confirm: boolean) {
     campaignId,
     status,
     sentAt: deliveredCount > 0 ? new Date() : null,
+  });
+
+  await createAuditLog({
+    actorId: actorId ?? campaign.createdBy,
+    event: `campaign.${status}`,
+    resourceType: "campaign",
+    resourceId: campaign.id,
+    metadata: {
+      provider: delivery.provider,
+      deliveredCount,
+      failedCount,
+    },
   });
 
   return {

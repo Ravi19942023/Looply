@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
+import { canManageKnowledgeBase } from "@/lib/auth/permissions";
 import { normalizePaginationInput } from "@/lib/pagination";
 import {
   getPaginatedKnowledgeDocuments,
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+  }
+
+  if (!canManageKnowledgeBase(session.user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {

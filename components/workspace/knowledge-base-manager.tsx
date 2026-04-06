@@ -53,7 +53,7 @@ function formatFileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function KnowledgeBaseManager() {
+export function KnowledgeBaseManager({ canManage }: { canManage: boolean }) {
   const [documents, setDocuments] = useState<KnowledgeEntry[]>([]);
   const [query, setQuery] = useState("");
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
@@ -194,6 +194,7 @@ export function KnowledgeBaseManager() {
       <div className="mb-6 grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <button
           className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-border/50 bg-card/60 p-6 text-center shadow-[var(--shadow-card)] transition hover:bg-card/80"
+          disabled={!canManage}
           onClick={() => fileInputRef.current?.click()}
           type="button"
         >
@@ -203,6 +204,11 @@ export function KnowledgeBaseManager() {
             PDF, DOCX, or TXT up to 25MB. Uploaded documents are parsed,
             chunked, embedded, and indexed automatically.
           </div>
+          {canManage ? null : (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Read-only for your role
+            </div>
+          )}
           {uploadStatus !== "idle" ? (
             <div className="mt-5 w-full max-w-xs">
               <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
@@ -260,7 +266,7 @@ export function KnowledgeBaseManager() {
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) {
+          if (file && canManage) {
             handleUpload(file).catch(() => undefined);
           }
           event.currentTarget.value = "";
@@ -288,9 +294,11 @@ export function KnowledgeBaseManager() {
               </div>
               <button
                 className="inline-flex size-9 items-center justify-center rounded-xl border border-border/40 bg-background/70 text-muted-foreground transition hover:text-destructive"
-                disabled={deletingIds.has(document.id)}
+                disabled={deletingIds.has(document.id) || !canManage}
                 onClick={() => {
-                  deleteDocument(document.id).catch(() => undefined);
+                  if (canManage) {
+                    deleteDocument(document.id).catch(() => undefined);
+                  }
                 }}
                 type="button"
               >
@@ -311,10 +319,13 @@ export function KnowledgeBaseManager() {
                 <input
                   checked={document.inContext}
                   className="size-4 rounded border-border"
+                  disabled={!canManage}
                   onChange={(event) => {
-                    toggleContext(document.id, event.target.checked).catch(
-                      () => undefined
-                    );
+                    if (canManage) {
+                      toggleContext(document.id, event.target.checked).catch(
+                        () => undefined
+                      );
+                    }
                   }}
                   type="checkbox"
                 />

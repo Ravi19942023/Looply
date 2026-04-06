@@ -14,6 +14,10 @@ export async function proxy(request: NextRequest) {
     return new Response("pong", { status: 200 });
   }
 
+  if (pathname.startsWith("/api/cron")) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith("/api/auth")) {
     return NextResponse.next();
   }
@@ -44,7 +48,8 @@ export async function proxy(request: NextRequest) {
             id: dbUser.id,
             email: dbUser.email,
             name: dbUser.name ?? null,
-            type: "regular",
+            role: (dbUser.role as "admin" | "manager" | "viewer") ?? "manager",
+            type: (dbUser.role as "admin" | "manager" | "viewer") ?? "manager",
           });
           response.cookies.set("looply_access_token", tokens.accessToken, {
             httpOnly: true,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { canManageKnowledgeBase } from "@/lib/auth/permissions";
 import {
   deleteKnowledgeDocument,
   toggleKnowledgeDocumentContext,
@@ -18,6 +19,10 @@ export async function PATCH(
 
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canManageKnowledgeBase(session.user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -50,6 +55,10 @@ export async function DELETE(
 
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canManageKnowledgeBase(session.user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { id } = await params;

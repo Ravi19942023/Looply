@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { auth } from "@/app/(auth)/auth";
 import { Input } from "@/components/ui/input";
 import { PageShell } from "@/components/workspace/page-shell";
 import { WorkspacePagination } from "@/components/workspace/workspace-pagination";
+import { canSendCampaign } from "@/lib/auth/permissions";
 import { getPaginatedCampaignDirectory } from "@/lib/db/queries";
 import {
   createUrlSearchParams,
@@ -36,6 +38,7 @@ export default async function Page({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (await searchParams) ?? {};
+  const session = await auth();
   const q = getSearchParamValue(params.q)?.trim() ?? "";
   const rawStatus = getSearchParamValue(params.status);
   const status =
@@ -75,12 +78,14 @@ export default async function Page({
   return (
     <PageShell
       actions={
-        <Link
-          className="inline-flex h-10 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition hover:bg-foreground/90"
-          href="/assistant?query=Create%20a%20campaign%20draft%20for%20premium%20customers"
-        >
-          Create via Assistant
-        </Link>
+        session?.user && canSendCampaign(session.user.role) ? (
+          <Link
+            className="inline-flex h-10 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition hover:bg-foreground/90"
+            href="/assistant?query=Create%20a%20campaign%20draft%20for%20premium%20customers"
+          >
+            Create via Assistant
+          </Link>
+        ) : null
       }
       description="Inspect draft and sent campaigns, recipient counts, and logged delivery outcomes from the seeded campaign data."
       title="Campaigns"

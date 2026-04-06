@@ -5,6 +5,7 @@ import type { createCampaign } from "./ai/tools/create-campaign";
 import type { createDocument } from "./ai/tools/create-document";
 import type { getAnalyticsSummaryTool } from "./ai/tools/get-analytics-summary";
 import type { getChurnRiskCustomersTool } from "./ai/tools/get-churn-risk-customers";
+import type { getCustomerLTVTool } from "./ai/tools/get-customer-ltv";
 import type { getTopCustomersTool } from "./ai/tools/get-top-customers";
 import type { getWeather } from "./ai/tools/get-weather";
 import type { recallUserContext } from "./ai/tools/recall-user-context";
@@ -24,6 +25,7 @@ export type MessageMetadata = z.infer<typeof messageMetadataSchema>;
 
 type weatherTool = InferUITool<typeof getWeather>;
 type topCustomersTool = InferUITool<typeof getTopCustomersTool>;
+type customerLTVTool = InferUITool<typeof getCustomerLTVTool>;
 type churnRiskCustomersTool = InferUITool<typeof getChurnRiskCustomersTool>;
 type searchCustomersUiTool = InferUITool<typeof searchCustomersTool>;
 type analyticsSummaryTool = InferUITool<typeof getAnalyticsSummaryTool>;
@@ -45,6 +47,7 @@ type recallUserContextTool = InferUITool<ReturnType<typeof recallUserContext>>;
 export type ChatTools = {
   getWeather: weatherTool;
   getTopCustomers: topCustomersTool;
+  getCustomerLTV: customerLTVTool;
   getChurnRiskCustomers: churnRiskCustomersTool;
   searchCustomers: searchCustomersUiTool;
   getAnalyticsSummary: analyticsSummaryTool;

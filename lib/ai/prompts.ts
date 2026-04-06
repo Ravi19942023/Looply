@@ -60,6 +60,7 @@ Looply business tools are available for customer intelligence, analytics, campai
 
 Business tool routing:
 - Customer ranking or customer value questions -> use \`getTopCustomers\`, \`getChurnRiskCustomers\`, or \`searchCustomers\`
+- Specific customer lifetime value questions -> use \`getCustomerLTV\`
 - KPI, revenue, or order summary questions -> use \`getAnalyticsSummary\`
 - Knowledge base / playbook / uploaded file / policy lookup -> you MUST use \`retrieveKnowledgeContext\` before answering
 - Do not answer knowledge-base questions from general model knowledge when retrieval is available

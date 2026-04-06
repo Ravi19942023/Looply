@@ -36,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useSidebar } from "@/components/ui/sidebar";
+import { canDeleteAllChats } from "@/lib/auth/permissions";
 import type { AuthUser } from "@/lib/auth/types";
 import { cn } from "@/lib/utils";
 
@@ -317,15 +318,17 @@ function SectionPane({
               <MessageSquarePlusIcon className="size-4" />
               New chat
             </Button>
-            <Button
-              className="h-9 rounded-xl"
-              onClick={onDeleteAll}
-              size="icon"
-              type="button"
-              variant="outline"
-            >
-              <Trash2Icon className="size-4" />
-            </Button>
+            {canDeleteAllChats(user.role) ? (
+              <Button
+                className="h-9 rounded-xl"
+                onClick={onDeleteAll}
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                <Trash2Icon className="size-4" />
+              </Button>
+            ) : null}
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">

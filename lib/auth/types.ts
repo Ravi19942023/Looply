@@ -1,8 +1,11 @@
+export type UserRole = "admin" | "manager" | "viewer";
+
 export type AuthUser = {
   email: string;
   id: string;
   name: string | null;
-  type: "regular";
+  role: UserRole;
+  type: UserRole;
 };
 
 export type AuthSession = {
@@ -13,6 +16,7 @@ export type AccessTokenPayload = {
   email: string;
   exp: number;
   name: string | null;
+  role: UserRole;
   sub: string;
   type: "access";
 };

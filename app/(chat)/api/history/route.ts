@@ -1,6 +1,11 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@/app/(auth)/auth";
-import { deleteAllChatsByUserId, getChatsByUserId } from "@/lib/db/queries";
+import { canDeleteAllChats } from "@/lib/auth/permissions";
+import {
+  createAuditLog,
+  deleteAllChatsByUserId,
+  getChatsByUserId,
+} from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
 export async function GET(request: NextRequest) {
@@ -43,7 +48,19 @@ export async function DELETE() {
     return new ChatbotError("unauthorized:chat").toResponse();
   }
 
+  if (!canDeleteAllChats(session.user.role)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const result = await deleteAllChatsByUserId({ userId: session.user.id });
+  await createAuditLog({
+    actorId: session.user.id,
+    event: "chat.delete_all",
+    resourceType: "chat",
+    metadata: {
+      deletedCount: result.deletedCount,
+    },
+  });
 
   return Response.json(result, { status: 200 });
 }

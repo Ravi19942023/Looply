@@ -18,7 +18,13 @@ function getMaxMessagesPerHour() {
 }
 
 export const entitlementsByUserType: Record<UserType, Entitlements> = {
-  regular: {
+  admin: {
+    maxMessagesPerHour: getMaxMessagesPerHour(),
+  },
+  manager: {
+    maxMessagesPerHour: getMaxMessagesPerHour(),
+  },
+  viewer: {
     maxMessagesPerHour: getMaxMessagesPerHour(),
   },
 };

@@ -12,5 +12,5 @@ export const sendCampaign = ({ session: _session }: { session: AuthSession }) =>
       confirm: z.boolean().default(false),
     }),
     execute: async ({ campaignId, confirm }) =>
-      sendCampaignDraft(campaignId, confirm),
+      sendCampaignDraft(campaignId, confirm, _session.user.id),
   });

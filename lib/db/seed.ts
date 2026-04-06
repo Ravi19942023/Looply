@@ -26,6 +26,7 @@ type SeedUser = {
   email: string;
   id: string;
   name: string;
+  role: "admin" | "manager" | "viewer";
 };
 
 type SeedCustomer = {
@@ -52,16 +53,19 @@ const seedUsers: SeedUser[] = [
     id: stableUuid("seed-user:admin@looply.ai"),
     email: "admin@looply.ai",
     name: "Looply Admin",
+    role: "admin",
   },
   {
     id: stableUuid("seed-user:manager@looply.ai"),
     email: "manager@looply.ai",
     name: "Looply Manager",
+    role: "manager",
   },
   {
     id: stableUuid("seed-user:viewer@looply.ai"),
     email: "viewer@looply.ai",
     name: "Looply Viewer",
+    role: "viewer",
   },
 ];
 
@@ -321,6 +325,7 @@ async function seedDatabase() {
         .update(user)
         .set({
           name: seedUser.name,
+          role: seedUser.role,
           password: passwordHash,
           emailVerified: true,
           isAnonymous: false,
@@ -332,6 +337,7 @@ async function seedDatabase() {
         id: seedUser.id,
         name: seedUser.name,
         email: seedUser.email,
+        role: seedUser.role,
         password: passwordHash,
         emailVerified: true,
         isAnonymous: false,
@@ -372,6 +378,7 @@ async function seedDatabase() {
       "Campaign",
       "Transaction",
       "CustomerMetric",
+      "DocumentEmbedding",
       "KnowledgeDocument",
       "UserMemory",
       "Product",

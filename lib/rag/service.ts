@@ -2,7 +2,7 @@ import { del, put } from "@vercel/blob";
 import { and, count, desc, eq, gte, ilike, or, sql as drizzleSql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { getChatById, saveChat } from "@/lib/db/queries";
+import { createAuditLog, getChatById, saveChat } from "@/lib/db/queries";
 import {
   chatDocument,
   documentEmbedding,
@@ -299,6 +299,17 @@ export async function uploadKnowledgeDocument(params: {
       .where(eq(knowledgeDocument.id, createdDocument.id))
       .returning();
 
+    await createAuditLog({
+      actorId: params.actorId,
+      event: "knowledge.uploaded",
+      resourceType: "knowledge",
+      resourceId: createdDocument.id,
+      metadata: {
+        fileName: params.file.name,
+        chunkCount: chunks.length,
+      },
+    });
+
     return updatedDocument ?? createdDocument;
   } catch (error) {
     await del(blob.url).catch(() => undefined);
@@ -334,6 +345,16 @@ export async function deleteKnowledgeDocument(params: {
   await db
     .delete(knowledgeDocument)
     .where(eq(knowledgeDocument.id, document.id));
+
+  await createAuditLog({
+    actorId: params.actorId,
+    event: "knowledge.deleted",
+    resourceType: "knowledge",
+    resourceId: document.id,
+    metadata: {
+      fileName: document.fileName ?? document.title,
+    },
+  });
 }
 
 export async function toggleKnowledgeDocumentContext(params: {
@@ -360,6 +381,16 @@ export async function toggleKnowledgeDocumentContext(params: {
     .set({ inContext: params.inContext, updatedAt: new Date() })
     .where(eq(knowledgeDocument.id, params.id))
     .returning();
+
+  await createAuditLog({
+    actorId: params.actorId,
+    event: "knowledge.context.updated",
+    resourceType: "knowledge",
+    resourceId: params.id,
+    metadata: {
+      inContext: params.inContext,
+    },
+  });
 
   return updated;
 }

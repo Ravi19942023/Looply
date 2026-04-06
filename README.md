@@ -242,6 +242,7 @@ EMAIL_FROM=
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
+CRON_SECRET=
 ```
 
 Also supported:
@@ -249,6 +250,7 @@ Also supported:
 ```bash
 IS_DEMO=0
 RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
+CRON_SECRET=
 ```
 
 Notes:
@@ -282,6 +284,12 @@ AI_GATEWAY_API_KEY=...
 BLOB_READ_WRITE_TOKEN=...
 POSTGRES_URL=...
 CHAT_MAX_MESSAGES_PER_HOUR=1000
+EMAIL_PROVIDER=ses
+EMAIL_FROM=...
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+CRON_SECRET=...
 ```
 
 4. Apply database migrations:
@@ -379,4 +387,53 @@ If you change schema or RAG code, rerun:
 pnpm db:migrate
 pnpm run db:seed
 pnpm exec next build
+```
+
+---
+
+## Background Job
+
+`chatbot-main` includes a cron-compatible metrics recompute route:
+
+```text
+POST /api/cron/recompute-metrics
+```
+
+Authorization:
+
+- `x-vercel-cron: 1`
+- or `Authorization: Bearer <CRON_SECRET>`
+- or `x-api-key: <CRON_SECRET>`
+
+What it recomputes:
+
+- `CustomerMetric.totalRevenue`
+- `CustomerMetric.ltv`
+- `CustomerMetric.orderCount`
+- `CustomerMetric.avgOrderValue`
+- `CustomerMetric.lastPurchaseAt`
+- `CustomerMetric.recencyScore`
+- `CustomerMetric.frequencyScore`
+- `CustomerMetric.monetaryScore`
+- `CustomerMetric.churnRiskScore`
+
+Vercel schedule:
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/cron/recompute-metrics",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
+```
+
+Manual trigger:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/cron/recompute-metrics
 ```

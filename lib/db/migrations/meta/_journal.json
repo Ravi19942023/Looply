@@ -43,6 +43,13 @@
       "when": 1710000005000,
       "tag": "0005_email_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1710000006000,
+      "tag": "0006_roles_audit_jobs",
+      "breakpoints": true
     }
   ]
 }
