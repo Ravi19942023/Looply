@@ -80,19 +80,24 @@ About the origin of user's request:
 `;
 
 export const systemPrompt = ({
+  ragContext,
   requestHints,
   supportsTools,
 }: {
+  ragContext?: string | null;
   requestHints: RequestHints;
   supportsTools: boolean;
 }) => {
   const requestPrompt = getRequestPromptFromHints(requestHints);
+  const ragPrompt = ragContext
+    ? `\n\nRetrieved knowledge context for this request:\n${ragContext}`
+    : "\n\nRetrieved knowledge context for this request:\nNo context retrieved yet.";
 
   if (!supportsTools) {
-    return `${regularPrompt}\n\n${requestPrompt}`;
+    return `${regularPrompt}\n\n${requestPrompt}${ragPrompt}`;
   }
 
-  return `${regularPrompt}\n\n${looplyBusinessPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+  return `${regularPrompt}\n\n${looplyBusinessPrompt}\n\n${requestPrompt}${ragPrompt}\n\n${artifactsPrompt}`;
 };
 
 export const codePrompt = `

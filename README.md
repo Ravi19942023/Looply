@@ -1,6 +1,6 @@
-# `chatbot-main`
+# `Looply`
 
-`chatbot-main` is the current productized workspace built on top of the original AI chatbot template. It now includes:
+Looply is the current productized workspace in this repository. It now includes:
 
 - a protected Looply-style workspace shell
 - assistant chat with artifacts and tool calling
@@ -10,7 +10,7 @@
 - knowledge-base uploads and session file uploads
 - pgvector-backed RAG retrieval and RAG telemetry
 
-This README is for the current repo state, not the original template.
+This README documents the current Looply app in this repository, not the original template the codebase started from.
 
 ---
 
@@ -202,16 +202,6 @@ RAG telemetry rows are written to `RagTelemetryLog`.
 
 After running `pnpm run db:seed`, these accounts are created/reset:
 
-- admin:
-  - email: `admin@looply.ai`
-  - password: `password123`
-- manager:
-  - email: `manager@looply.ai`
-  - password: `password123`
-- viewer:
-  - email: `viewer@looply.ai`
-  - password: `password123`
-
 Primary local login:
 
 - email: `admin@looply.ai`
@@ -247,6 +237,11 @@ BLOB_READ_WRITE_TOKEN=
 POSTGRES_URL=
 REDIS_URL=
 CHAT_MAX_MESSAGES_PER_HOUR=1000
+EMAIL_PROVIDER=ses
+EMAIL_FROM=
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
 ```
 
 Also supported:
@@ -261,6 +256,7 @@ Notes:
 - `POSTGRES_URL` must point to a Postgres instance with `pgvector` available.
 - Blob uploads currently assume a private Blob store and use private access.
 - `REDIS_URL` is optional for resumable stream support; the app can still run without it.
+- confirmed campaign send requires valid SES env configuration
 
 ---
 
@@ -291,7 +287,7 @@ CHAT_MAX_MESSAGES_PER_HOUR=1000
 4. Apply database migrations:
 
 ```bash
-pnpm db:migrate
+pnpm db:push
 ```
 
 5. Seed local data:

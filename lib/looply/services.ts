@@ -5,12 +5,14 @@ import {
   getCampaignDraftById,
   getChurnRiskCustomers as getChurnRiskCustomersRecord,
   getTopCustomers as getTopCustomersRecord,
-  markCampaignSent,
   recallUserContext as recallUserContextRecord,
   retrieveKnowledgeContext as retrieveKnowledgeContextRecord,
   searchCustomers as searchCustomersRecord,
   storeUserPreference as storeUserPreferenceRecord,
+  updateCampaignDeliveryStatus,
 } from "@/lib/db/queries";
+import { EmailService } from "@/lib/email/email.service";
+import { createEmailAdapter } from "@/lib/email/email-adapter.factory";
 
 export function getTopCustomers(limit = 5) {
   return getTopCustomersRecord({ limit });
@@ -65,21 +67,46 @@ export async function sendCampaignDraft(campaignId: string, confirm: boolean) {
     };
   }
 
-  const sent = await markCampaignSent({ campaignId });
-  if (!sent) {
-    return {
-      error: "Campaign not found.",
-    };
-  }
+  const emailService = new EmailService(createEmailAdapter());
+  const delivery = await emailService.send(
+    {
+      to: (campaign.recipients ?? []).map((recipient) => recipient.email),
+      subject: campaign.subject,
+      html: campaign.message,
+    },
+    { campaignId: campaign.id }
+  );
+
+  const deliveredCount = delivery.results.filter(
+    (result) => result.success
+  ).length;
+  const failedCount = delivery.results.length - deliveredCount;
+  const status =
+    deliveredCount === 0 ? "failed" : failedCount === 0 ? "sent" : "partial";
 
   await createCampaignLogs({
+    logs: delivery.results.map((result) => ({
+      campaignId: campaign.id,
+      email: result.recipient,
+      status: result.success ? "sent" : "failed",
+      messageId: result.messageId ?? null,
+      sentAt: new Date(),
+    })),
+  });
+
+  const updatedCampaign = await updateCampaignDeliveryStatus({
     campaignId,
-    recipients: sent.recipients ?? [],
+    status,
+    sentAt: deliveredCount > 0 ? new Date() : null,
   });
 
   return {
-    success: true as const,
-    campaign: sent,
+    success: deliveredCount > 0,
+    campaign: updatedCampaign ?? campaign,
+    provider: delivery.provider,
+    deliveredCount,
+    failedCount,
+    logs: delivery.results,
   };
 }
 

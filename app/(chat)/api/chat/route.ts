@@ -47,6 +47,7 @@ import {
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
+import { retrieveKnowledgeContext as retrieveKnowledgeContextDirect } from "@/lib/rag/service";
 import { checkIpRateLimit } from "@/lib/ratelimit";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -88,6 +89,45 @@ function isKnowledgeLookupIntent(text: string) {
   }
 
   return /^(what is|who is|where is|tell me about|explain)\b/.test(normalized);
+}
+
+function getNonImageFileNamesFromMessage(message?: ChatMessage) {
+  if (!message || message.role !== "user") {
+    return [];
+  }
+
+  return message.parts
+    .filter(
+      (
+        part
+      ): part is Extract<(typeof message.parts)[number], { type: "file" }> =>
+        part.type === "file" && !part.mediaType.startsWith("image/")
+    )
+    .map((part) => {
+      if ("name" in part && typeof part.name === "string" && part.name) {
+        return part.name;
+      }
+
+      if ("filename" in part && part.filename) {
+        return part.filename;
+      }
+
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function sanitizeMessagesForModel(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    parts: message.parts.filter((part) => {
+      if (part.type !== "file") {
+        return true;
+      }
+
+      return part.mediaType.startsWith("image/");
+    }),
+  }));
 }
 
 function getStreamContext() {
@@ -226,17 +266,50 @@ export async function POST(request: Request) {
     const isReasoningModel = capabilities?.reasoning === true;
     const supportsTools = capabilities?.tools === true;
 
-    const modelMessages = await convertToModelMessages(uiMessages);
     const latestUserText = getUserTextFromMessage(message);
+    const latestFileNames = getNonImageFileNamesFromMessage(message);
+    const autoRagQuery = [latestUserText, ...latestFileNames].join(" ").trim();
+    const shouldAutoRetrieve =
+      autoRagQuery.length > 0 &&
+      !isToolApprovalFlow &&
+      (isKnowledgeLookupIntent(latestUserText) || latestFileNames.length > 0);
+
+    const autoRagContext = shouldAutoRetrieve
+      ? await retrieveKnowledgeContextDirect({
+          actorId: session.user.id,
+          chatId: id,
+          limit: 5,
+          query: autoRagQuery,
+        })
+      : [];
+
+    const ragContextText =
+      autoRagContext.length > 0
+        ? autoRagContext
+            .map(
+              (chunk) =>
+                `### Source: ${chunk.fileName} (${chunk.scope})\n> ${chunk.text}`
+            )
+            .join("\n\n")
+        : null;
+
+    const modelMessages = await convertToModelMessages(
+      sanitizeMessagesForModel(uiMessages)
+    );
     const forceKnowledgeRetrieval =
-      !isToolApprovalFlow && isKnowledgeLookupIntent(latestUserText);
+      !isToolApprovalFlow &&
+      (isKnowledgeLookupIntent(latestUserText) || latestFileNames.length > 0);
 
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(chatModel),
-          system: systemPrompt({ requestHints, supportsTools }),
+          system: systemPrompt({
+            ragContext: ragContextText,
+            requestHints,
+            supportsTools,
+          }),
           messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools:

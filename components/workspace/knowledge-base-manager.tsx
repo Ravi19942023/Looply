@@ -25,6 +25,18 @@ type KnowledgeEntry = {
 
 type UploadStatus = "complete" | "error" | "idle" | "processing" | "uploading";
 
+type KnowledgeBaseResponse = {
+  items: KnowledgeEntry[];
+  pagination: {
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+};
+
 function formatFileSize(bytes: number | null) {
   if (!bytes) {
     return "Curated";
@@ -48,13 +60,15 @@ export function KnowledgeBaseManager() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [totalDocuments, setTotalDocuments] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     async function loadDocuments() {
       const response = await fetch("/api/knowledge-base");
-      const data = (await response.json()) as KnowledgeEntry[];
-      setDocuments(data);
+      const data = (await response.json()) as KnowledgeBaseResponse;
+      setDocuments(Array.isArray(data.items) ? data.items : []);
+      setTotalDocuments(data.pagination?.totalItems ?? 0);
     }
 
     loadDocuments().catch(() => undefined);
@@ -97,6 +111,7 @@ export function KnowledgeBaseManager() {
       setUploadProgress(85);
       const document = (await response.json()) as KnowledgeEntry;
       setDocuments((current) => [document, ...current]);
+      setTotalDocuments((current) => current + 1);
       setUploadProgress(100);
       setUploadStatus("complete");
       toast.success("Knowledge document uploaded");
@@ -150,6 +165,7 @@ export function KnowledgeBaseManager() {
       }
 
       setDocuments((current) => current.filter((item) => item.id !== id));
+      setTotalDocuments((current) => Math.max(0, current - 1));
       toast.success("Knowledge document deleted");
     } catch (error) {
       toast.error(
@@ -214,7 +230,7 @@ export function KnowledgeBaseManager() {
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/60">
                 Documents
               </div>
-              <div className="mt-1 text-2xl font-bold">{documents.length}</div>
+              <div className="mt-1 text-2xl font-bold">{totalDocuments}</div>
             </div>
             <div className="rounded-2xl bg-background/70 px-4 py-3">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/60">

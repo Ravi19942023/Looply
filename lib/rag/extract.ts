@@ -41,18 +41,30 @@ export async function extractText(
 ): Promise<TextExtractionResult> {
   switch (contentType) {
     case "application/pdf": {
-      const data = await pdf(buffer);
-      return {
-        method: "pdf-parse",
-        text: data.text ?? "",
-      };
+      try {
+        const data = await pdf(buffer);
+        return {
+          method: "pdf-parse",
+          text: data.text ?? "",
+        };
+      } catch (_error) {
+        throw new Error(
+          "This PDF could not be parsed. The file may be malformed, encrypted, or use an unsupported structure."
+        );
+      }
     }
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
-      const data = await mammoth.extractRawText({ buffer });
-      return {
-        method: "mammoth",
-        text: data.value ?? "",
-      };
+      try {
+        const data = await mammoth.extractRawText({ buffer });
+        return {
+          method: "mammoth",
+          text: data.value ?? "",
+        };
+      } catch (_error) {
+        throw new Error(
+          "This DOCX file could not be parsed. The file may be malformed or unsupported."
+        );
+      }
     }
     default:
       return {

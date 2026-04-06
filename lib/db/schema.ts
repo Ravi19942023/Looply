@@ -266,6 +266,23 @@ export const campaignLog = pgTable("CampaignLog", {
 
 export type CampaignLog = InferSelectModel<typeof campaignLog>;
 
+export const emailLog = pgTable("EmailLog", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  recipient: varchar("recipient", { length: 255 }).notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
+  messageId: varchar("messageId", { length: 255 }),
+  provider: varchar("provider", { length: 50 }).notNull().default("ses"),
+  metadata: json("metadata")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+  sentAt: timestamp("sentAt").notNull().defaultNow(),
+});
+
+export type EmailLog = InferSelectModel<typeof emailLog>;
+
 export const userMemory = pgTable("UserMemory", {
   userId: uuid("userId")
     .primaryKey()

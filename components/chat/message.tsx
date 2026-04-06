@@ -384,12 +384,16 @@ const PurePreviewMessage = ({
         const campaign = part.output.campaign;
         return (
           <CampaignSentCard
+            deliveredCount={part.output.deliveredCount ?? 0}
+            failedCount={part.output.failedCount ?? 0}
             key={toolCallId}
             name={campaign.name}
+            provider={part.output.provider}
             recipientCount={campaign.recipientCount}
             recipients={campaign.recipients}
             segment={campaign.segment}
             sentAt={campaign.sentAt}
+            status={campaign.status}
             subject={campaign.subject}
           />
         );

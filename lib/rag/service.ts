@@ -1,5 +1,5 @@
 import { del, put } from "@vercel/blob";
-import { and, desc, sql as drizzleSql, eq, gte } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, or, sql as drizzleSql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { getChatById, saveChat } from "@/lib/db/queries";
@@ -10,6 +10,7 @@ import {
   ragTelemetryLog,
   user,
 } from "@/lib/db/schema";
+import { buildPaginationMeta, type PaginationMeta } from "@/lib/pagination";
 import { chunkText } from "./chunk";
 import {
   DEFAULT_RAG_LIMIT,
@@ -168,6 +169,62 @@ export function listKnowledgeDocuments(actorId?: string) {
   return actorId
     ? query.where(eq(knowledgeDocument.createdBy, actorId))
     : query;
+}
+
+export async function getPaginatedKnowledgeDocuments(params: {
+  actorId?: string;
+  page: number;
+  pageSize: number;
+  q?: string;
+}): Promise<{
+  items: Awaited<ReturnType<typeof listKnowledgeDocuments>>;
+  pagination: PaginationMeta;
+}> {
+  const filters = [];
+  const normalizedQuery = params.q?.trim();
+
+  if (params.actorId) {
+    filters.push(eq(knowledgeDocument.createdBy, params.actorId));
+  }
+
+  if (normalizedQuery) {
+    const searchPattern = `%${normalizedQuery}%`;
+    const searchFilter = or(
+      ilike(knowledgeDocument.title, searchPattern),
+      ilike(knowledgeDocument.content, searchPattern),
+      ilike(knowledgeDocument.fileName, searchPattern)
+    );
+
+    if (searchFilter) {
+      filters.push(searchFilter);
+    }
+  }
+
+  const whereClause = filters.length > 0 ? and(...filters) : undefined;
+
+  const [countResult] = await db
+    .select({ count: count(knowledgeDocument.id) })
+    .from(knowledgeDocument)
+    .where(whereClause);
+
+  const pagination = buildPaginationMeta({
+    page: params.page,
+    pageSize: params.pageSize,
+    total: countResult?.count ?? 0,
+  });
+
+  const items = await db
+    .select()
+    .from(knowledgeDocument)
+    .where(whereClause)
+    .orderBy(desc(knowledgeDocument.updatedAt))
+    .limit(pagination.pageSize)
+    .offset((pagination.page - 1) * pagination.pageSize);
+
+  return {
+    items,
+    pagination,
+  };
 }
 
 export async function uploadKnowledgeDocument(params: {
@@ -743,4 +800,53 @@ export async function getRagTelemetryRows({ days = 30 }: { days?: number }) {
     .orderBy(desc(ragTelemetryLog.createdAt));
 
   return rows as RagTelemetryRow[];
+}
+
+export async function getPaginatedRagTelemetryRows(params: {
+  days?: number;
+  page: number;
+  pageSize: number;
+}): Promise<{
+  items: RagTelemetryRow[];
+  pagination: PaginationMeta;
+}> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (params.days ?? 30));
+
+  const [countResult] = await db
+    .select({ count: count(ragTelemetryLog.id) })
+    .from(ragTelemetryLog)
+    .where(gte(ragTelemetryLog.createdAt, cutoff));
+
+  const pagination = buildPaginationMeta({
+    page: params.page,
+    pageSize: params.pageSize,
+    total: countResult?.count ?? 0,
+  });
+
+  const items = await db
+    .select({
+      id: ragTelemetryLog.id,
+      actorId: ragTelemetryLog.actorId,
+      actorEmail: user.email,
+      chatId: ragTelemetryLog.chatId,
+      source: ragTelemetryLog.source,
+      model: ragTelemetryLog.model,
+      promptTokens: ragTelemetryLog.promptTokens,
+      completionTokens: ragTelemetryLog.completionTokens,
+      totalTokens: ragTelemetryLog.totalTokens,
+      metadata: ragTelemetryLog.metadata,
+      createdAt: ragTelemetryLog.createdAt,
+    })
+    .from(ragTelemetryLog)
+    .leftJoin(user, eq(ragTelemetryLog.actorId, user.id))
+    .where(gte(ragTelemetryLog.createdAt, cutoff))
+    .orderBy(desc(ragTelemetryLog.createdAt))
+    .limit(pagination.pageSize)
+    .offset((pagination.page - 1) * pagination.pageSize);
+
+  return {
+    items: items as RagTelemetryRow[],
+    pagination,
+  };
 }

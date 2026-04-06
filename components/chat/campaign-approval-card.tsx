@@ -4,8 +4,15 @@ import { CheckCircle, Loader2, Send, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CampaignSentCard } from "./campaign-sent-card";
 
-type ApprovalState = "pending" | "sending" | "sent" | "failed" | "cancelled";
+type ApprovalState =
+  | "pending"
+  | "sending"
+  | "sent"
+  | "partial"
+  | "failed"
+  | "cancelled";
 
 export function CampaignApprovalCard({
   campaignId,
@@ -25,6 +32,20 @@ export function CampaignApprovalCard({
   subject: string;
 }>) {
   const [approvalState, setApprovalState] = useState<ApprovalState>("pending");
+  const [deliveryResult, setDeliveryResult] = useState<{
+    campaign: {
+      name: string;
+      recipientCount: number | null;
+      recipients?: { name: string; email: string }[] | null;
+      segment: string;
+      sentAt?: Date | string | null;
+      status?: string;
+      subject: string;
+    };
+    deliveredCount: number;
+    failedCount: number;
+    provider?: string;
+  } | null>(null);
 
   const handleApprove = async () => {
     setApprovalState("sending");
@@ -39,11 +60,38 @@ export function CampaignApprovalCard({
       );
 
       if (!response.ok) {
-        throw new Error("Failed to send campaign");
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error ?? "Failed to send campaign");
       }
 
-      setApprovalState("sent");
-      toast.success("Campaign dispatched");
+      const data = (await response.json()) as {
+        campaign: {
+          name: string;
+          recipientCount: number | null;
+          recipients?: { name: string; email: string }[] | null;
+          segment: string;
+          sentAt?: Date | string | null;
+          status?: string;
+          subject: string;
+        };
+        deliveredCount: number;
+        failedCount: number;
+        provider?: string;
+      };
+
+      setDeliveryResult(data);
+      setApprovalState(
+        data.failedCount > 0 && data.deliveredCount > 0
+          ? "partial"
+          : data.deliveredCount > 0
+            ? "sent"
+            : "failed"
+      );
+      toast.success(
+        data.failedCount > 0
+          ? "Campaign delivered with partial failures"
+          : "Campaign dispatched"
+      );
     } catch (error) {
       setApprovalState("failed");
       toast.error(
@@ -52,11 +100,29 @@ export function CampaignApprovalCard({
     }
   };
 
+  if (deliveryResult) {
+    return (
+      <CampaignSentCard
+        deliveredCount={deliveryResult.deliveredCount}
+        failedCount={deliveryResult.failedCount}
+        name={deliveryResult.campaign.name}
+        provider={deliveryResult.provider}
+        recipientCount={deliveryResult.campaign.recipientCount}
+        recipients={deliveryResult.campaign.recipients}
+        segment={deliveryResult.campaign.segment}
+        sentAt={deliveryResult.campaign.sentAt}
+        status={deliveryResult.campaign.status}
+        subject={deliveryResult.campaign.subject}
+      />
+    );
+  }
+
   return (
     <div
       className={cn(
         "my-2 w-full max-w-[520px] overflow-hidden rounded-[28px] border border-border/40 bg-background/70 p-5 shadow-xl",
-        approvalState === "sent" && "border-emerald-500/30 bg-emerald-500/5",
+        (approvalState === "sent" || approvalState === "partial") &&
+          "border-emerald-500/30 bg-emerald-500/5",
         approvalState === "failed" && "border-destructive/30 bg-destructive/5"
       )}
     >
@@ -144,10 +210,12 @@ export function CampaignApprovalCard({
         </div>
       ) : null}
 
-      {approvalState === "sent" ? (
+      {approvalState === "sent" || approvalState === "partial" ? (
         <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-600">
           <CheckCircle size={16} />
-          Campaign transmission successful.
+          {approvalState === "partial"
+            ? "Campaign delivered with partial failures."
+            : "Campaign transmission successful."}
         </div>
       ) : null}
 

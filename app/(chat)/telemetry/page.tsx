@@ -1,8 +1,46 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { PageShell } from "@/components/workspace/page-shell";
 import { StatCard } from "@/components/workspace/stat-card";
+import { WorkspacePagination } from "@/components/workspace/workspace-pagination";
 import { getTelemetryOverview } from "@/lib/db/queries";
-import { getRagTelemetryRows, getRagTelemetrySummary } from "@/lib/rag/service";
+import {
+  createUrlSearchParams,
+  getSearchParamValue,
+  normalizePaginationInput,
+  type SearchParams,
+} from "@/lib/pagination";
+import {
+  getPaginatedRagTelemetryRows,
+  getRagTelemetrySummary,
+} from "@/lib/rag/service";
+
+const VALID_DAY_WINDOWS = new Set([7, 30, 90]);
+
+function buildTelemetryHref(
+  searchParams: SearchParams,
+  updates: Record<string, string | undefined>
+) {
+  const params = createUrlSearchParams(searchParams);
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (!value) {
+      params.delete(key);
+      continue;
+    }
+
+    params.set(key, value);
+  }
+
+  const query = params.toString();
+  return query.length > 0 ? `/telemetry?${query}` : "/telemetry";
+}
+
+function getActionClassName(isActive: boolean) {
+  return isActive
+    ? "inline-flex h-10 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition hover:bg-foreground/90"
+    : "inline-flex h-10 items-center rounded-xl border border-border/40 bg-background/70 px-4 text-sm font-medium transition hover:bg-muted";
+}
 
 export default async function Page({
   searchParams,
@@ -10,33 +48,69 @@ export default async function Page({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (await searchParams) ?? {};
-  const rawDays = typeof params.days === "string" ? Number(params.days) : 30;
-  const days = Number.isFinite(rawDays) ? rawDays : 30;
+  const rawDays = getSearchParamValue(params.days);
+  const parsedDays = rawDays ? Number.parseInt(rawDays, 10) : 30;
+  const days = VALID_DAY_WINDOWS.has(parsedDays) ? parsedDays : 30;
+  const paginationInput = normalizePaginationInput({
+    page: getSearchParamValue(params.page),
+    pageSize: getSearchParamValue(params.pageSize),
+  });
+
   const [telemetry, ragSummary, ragRows] = await Promise.all([
     getTelemetryOverview({ days }),
     getRagTelemetrySummary({ days }),
-    getRagTelemetryRows({ days }),
+    getPaginatedRagTelemetryRows({
+      days,
+      page: paginationInput.page,
+      pageSize: paginationInput.pageSize,
+    }),
   ]);
+
+  if (
+    paginationInput.didNormalizeInput ||
+    ragRows.pagination.page !== paginationInput.page ||
+    (rawDays != null && String(days) !== rawDays)
+  ) {
+    redirect(
+      buildTelemetryHref(params, {
+        days: String(days),
+        page: String(ragRows.pagination.page),
+        pageSize: String(ragRows.pagination.pageSize),
+      })
+    );
+  }
 
   return (
     <PageShell
       actions={
         <>
           <Link
-            className="inline-flex h-10 items-center rounded-xl border border-border/40 bg-background/70 px-4 text-sm font-medium transition hover:bg-muted"
-            href="/telemetry?days=7"
+            className={getActionClassName(days === 7)}
+            href={buildTelemetryHref(params, {
+              days: "7",
+              page: "1",
+              pageSize: String(ragRows.pagination.pageSize),
+            })}
           >
             7 days
           </Link>
           <Link
-            className="inline-flex h-10 items-center rounded-xl border border-border/40 bg-background/70 px-4 text-sm font-medium transition hover:bg-muted"
-            href="/telemetry?days=30"
+            className={getActionClassName(days === 30)}
+            href={buildTelemetryHref(params, {
+              days: "30",
+              page: "1",
+              pageSize: String(ragRows.pagination.pageSize),
+            })}
           >
             30 days
           </Link>
           <Link
-            className="inline-flex h-10 items-center rounded-xl bg-foreground px-4 text-sm font-medium text-background transition hover:bg-foreground/90"
-            href="/telemetry?days=90"
+            className={getActionClassName(days === 90)}
+            href={buildTelemetryHref(params, {
+              days: "90",
+              page: "1",
+              pageSize: String(ragRows.pagination.pageSize),
+            })}
           >
             90 days
           </Link>
@@ -65,6 +139,16 @@ export default async function Page({
           hint="Document revisions created in range"
           label="Documents"
           value={String(telemetry.totals.documents)}
+        />
+        <StatCard
+          hint="Recipient deliveries recorded via SES"
+          label="Email Sends"
+          value={String(telemetry.totals.emailDeliveries)}
+        />
+        <StatCard
+          hint="Recipient sends that failed"
+          label="Email Failures"
+          value={String(telemetry.totals.emailFailures)}
         />
         <StatCard
           hint={`${ragSummary.queryEmbedCount} query embeddings / ${ragSummary.documentEmbedCount} document embeddings`}
@@ -109,14 +193,15 @@ export default async function Page({
       <div className="mt-6 rounded-3xl border border-border/40 bg-card/60 p-5 shadow-[var(--shadow-card)]">
         <div className="mb-4 text-sm font-semibold">RAG Operations</div>
         <div className="space-y-3">
-          {ragRows.length === 0 ? (
+          {ragRows.items.length === 0 ? (
             <div className="rounded-2xl bg-background/70 px-4 py-3 text-sm text-muted-foreground">
               No RAG operations recorded yet.
             </div>
           ) : (
-            ragRows.map((row) => (
+            ragRows.items.map((row) => (
               <div
                 className="grid grid-cols-[1.2fr_0.9fr_0.8fr_0.8fr_0.9fr_1fr] gap-3 rounded-2xl bg-background/70 px-4 py-3 text-sm"
+                data-testid="rag-row"
                 key={row.id}
               >
                 <div>
@@ -141,6 +226,13 @@ export default async function Page({
             ))
           )}
         </div>
+
+        <WorkspacePagination
+          className="mt-4"
+          pagination={ragRows.pagination}
+          pathname="/telemetry"
+          searchParams={params}
+        />
       </div>
     </PageShell>
   );

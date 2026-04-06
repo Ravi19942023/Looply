@@ -3,17 +3,25 @@
 import { CheckCircle2Icon, SendIcon, UsersIcon } from "lucide-react";
 
 export function CampaignSentCard({
+  deliveredCount,
+  failedCount,
   name,
+  provider,
   recipientCount,
   recipients,
   segment,
+  status,
   sentAt,
   subject,
 }: Readonly<{
+  deliveredCount: number;
+  failedCount: number;
   name: string;
+  provider?: string;
   recipientCount: number | null;
   recipients?: { name: string; email: string }[] | null;
   segment: string;
+  status?: string;
   sentAt?: Date | string | null;
   subject: string;
 }>) {
@@ -24,19 +32,53 @@ export function CampaignSentCard({
       }).format(new Date(sentAt))
     : "Just now";
 
+  const statusTone =
+    status === "failed"
+      ? {
+          border: "border-destructive/20",
+          bg: "bg-destructive/5",
+          icon: "bg-destructive text-white",
+          text: "text-destructive",
+          label: "Campaign Failed",
+          summary: "No recipients were delivered successfully.",
+        }
+      : status === "partial"
+        ? {
+            border: "border-amber-500/20",
+            bg: "bg-amber-500/5",
+            icon: "bg-amber-500 text-white",
+            text: "text-amber-700",
+            label: "Campaign Partially Sent",
+            summary: "Some recipients were delivered successfully.",
+          }
+        : {
+            border: "border-emerald-500/20",
+            bg: "bg-emerald-500/5",
+            icon: "bg-emerald-600 text-white",
+            text: "text-emerald-700",
+            label: "Campaign Sent",
+            summary: "Delivery completed successfully.",
+          };
+
   return (
-    <div className="w-full max-w-[520px] overflow-hidden rounded-[28px] border border-emerald-500/20 bg-emerald-500/5 p-5 shadow-xl">
+    <div
+      className={`w-full max-w-[520px] overflow-hidden rounded-[28px] border ${statusTone.border} ${statusTone.bg} p-5 shadow-xl`}
+    >
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg">
+          <div
+            className={`flex size-10 items-center justify-center rounded-xl ${statusTone.icon} shadow-lg`}
+          >
             <SendIcon size={18} />
           </div>
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700/70">
-              Campaign Sent
+            <div
+              className={`text-[10px] font-bold uppercase tracking-[0.2em] ${statusTone.text}/80`}
+            >
+              {statusTone.label}
             </div>
             <div className="text-sm font-bold tracking-tight">
-              Delivery completed successfully
+              Provider: {provider ?? "ses"}
             </div>
           </div>
         </div>
@@ -57,6 +99,12 @@ export function CampaignSentCard({
         </div>
         <div>
           <strong>Recipients:</strong> {recipientCount ?? 0}
+        </div>
+        <div>
+          <strong>Delivered:</strong> {deliveredCount}
+        </div>
+        <div>
+          <strong>Failed:</strong> {failedCount}
         </div>
       </div>
 
@@ -82,9 +130,17 @@ export function CampaignSentCard({
         </div>
       ) : null}
 
-      <div className="mt-4 flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700">
+      <div
+        className={`mt-4 flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium ${statusTone.text} ${
+          status === "failed"
+            ? "bg-destructive/10"
+            : status === "partial"
+              ? "bg-amber-500/10"
+              : "bg-emerald-500/10"
+        }`}
+      >
         <CheckCircle2Icon className="size-4" />
-        The campaign has been authorized and sent.
+        {statusTone.summary}
       </div>
     </div>
   );

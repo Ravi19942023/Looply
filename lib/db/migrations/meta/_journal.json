@@ -36,6 +36,13 @@
       "when": 1710000004000,
       "tag": "0004_rag_stack",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1710000005000,
+      "tag": "0005_email_logs",
+      "breakpoints": true
     }
   ]
 }

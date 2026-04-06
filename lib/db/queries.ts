@@ -8,8 +8,10 @@ import {
   eq,
   gt,
   gte,
+  ilike,
   inArray,
   lt,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -18,6 +20,7 @@ import postgres from "postgres";
 import type { ArtifactKind } from "@/components/chat/artifact";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { ChatbotError } from "../errors";
+import { buildPaginationMeta, type PaginationMeta } from "../pagination";
 import { generateUUID } from "../utils";
 import {
   type Chat,
@@ -28,6 +31,7 @@ import {
   customerMetric,
   type DBMessage,
   document,
+  emailLog,
   knowledgeDocument,
   message,
   product,
@@ -1029,27 +1033,60 @@ export async function markCampaignSent({ campaignId }: { campaignId: string }) {
   }
 }
 
-export async function createCampaignLogs({
+export async function updateCampaignDeliveryStatus({
   campaignId,
-  recipients,
+  status,
+  sentAt,
 }: {
   campaignId: string;
-  recipients: Array<{ email: string; name: string }>;
+  status: "draft" | "sent" | "partial" | "failed";
+  sentAt: Date | null;
 }) {
   try {
-    if (recipients.length === 0) {
+    const [updatedCampaign] = await db
+      .update(campaign)
+      .set({
+        status,
+        sentAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(campaign.id, campaignId))
+      .returning();
+
+    return updatedCampaign ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to update campaign delivery status"
+    );
+  }
+}
+
+export async function createCampaignLogs({
+  logs,
+}: {
+  logs: Array<{
+    campaignId: string;
+    email: string;
+    status: string;
+    messageId?: string | null;
+    sentAt?: Date;
+  }>;
+}) {
+  try {
+    if (logs.length === 0) {
       return [];
     }
 
     return await db
       .insert(campaignLog)
       .values(
-        recipients.map((recipient, index) => ({
-          campaignId,
-          email: recipient.email,
-          status: "sent",
-          messageId: `campaign-${index + 1}`,
-          sentAt: new Date(),
+        logs.map((log) => ({
+          campaignId: log.campaignId,
+          email: log.email,
+          status: log.status,
+          messageId: log.messageId ?? null,
+          sentAt: log.sentAt ?? new Date(),
         }))
       )
       .returning();
@@ -1057,6 +1094,48 @@ export async function createCampaignLogs({
     throw new ChatbotError(
       "bad_request:database",
       "Failed to create campaign logs"
+    );
+  }
+}
+
+export async function createEmailLogs({
+  logs,
+}: {
+  logs: Array<{
+    recipient: string;
+    subject: string;
+    body: string;
+    status: string;
+    messageId?: string | null;
+    provider: string;
+    metadata?: Record<string, unknown>;
+    sentAt?: Date;
+  }>;
+}) {
+  try {
+    if (logs.length === 0) {
+      return [];
+    }
+
+    return await db
+      .insert(emailLog)
+      .values(
+        logs.map((log) => ({
+          recipient: log.recipient,
+          subject: log.subject,
+          body: log.body,
+          status: log.status,
+          messageId: log.messageId ?? null,
+          provider: log.provider,
+          metadata: log.metadata ?? {},
+          sentAt: log.sentAt ?? new Date(),
+        }))
+      )
+      .returning();
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create email logs"
     );
   }
 }
@@ -1171,6 +1250,95 @@ export async function getCustomerDirectory() {
   }
 }
 
+export async function getPaginatedCustomerDirectory(params: {
+  page: number;
+  pageSize: number;
+  q?: string;
+  segment?: string;
+  sort?: "churn" | "revenue";
+}): Promise<{
+  items: Awaited<ReturnType<typeof getCustomerDirectory>>;
+  pagination: PaginationMeta;
+}> {
+  try {
+    const filters: SQL<unknown>[] = [];
+    const normalizedQuery = params.q?.trim();
+
+    if (normalizedQuery) {
+      const searchPattern = `%${normalizedQuery}%`;
+      const searchFilter = or(
+        ilike(customer.name, searchPattern),
+        ilike(customer.email, searchPattern),
+        ilike(customer.segment, searchPattern),
+        sql`${customer.tags}::text ilike ${searchPattern}`
+      );
+
+      if (searchFilter) {
+        filters.push(searchFilter);
+      }
+    }
+
+    if (params.segment && params.segment !== "all") {
+      filters.push(eq(customer.segment, params.segment));
+    }
+
+    const whereClause = filters.length > 0 ? and(...filters) : undefined;
+
+    const [countResult] = await db
+      .select({ count: count(customer.id) })
+      .from(customer)
+      .leftJoin(customerMetric, eq(customer.id, customerMetric.customerId))
+      .where(whereClause);
+
+    const pagination = buildPaginationMeta({
+      page: params.page,
+      pageSize: params.pageSize,
+      total: countResult?.count ?? 0,
+    });
+
+    const items = await db
+      .select({
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        segment: customer.segment,
+        tags: customer.tags,
+        totalRevenue: customerMetric.totalRevenue,
+        ltv: customerMetric.ltv,
+        orderCount: customerMetric.orderCount,
+        avgOrderValue: customerMetric.avgOrderValue,
+        lastPurchaseAt: customerMetric.lastPurchaseAt,
+        churnRiskScore: customerMetric.churnRiskScore,
+        recencyScore: customerMetric.recencyScore,
+        frequencyScore: customerMetric.frequencyScore,
+        monetaryScore: customerMetric.monetaryScore,
+        updatedAt: customerMetric.updatedAt,
+      })
+      .from(customer)
+      .leftJoin(customerMetric, eq(customer.id, customerMetric.customerId))
+      .where(whereClause)
+      .orderBy(
+        params.sort === "churn"
+          ? desc(customerMetric.churnRiskScore)
+          : desc(customerMetric.totalRevenue),
+        asc(customer.name)
+      )
+      .limit(pagination.pageSize)
+      .offset((pagination.page - 1) * pagination.pageSize);
+
+    return {
+      items,
+      pagination,
+    };
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get paginated customer directory"
+    );
+  }
+}
+
 export async function getCampaignDirectory() {
   try {
     const campaigns = await db
@@ -1218,6 +1386,106 @@ export async function getCampaignDirectory() {
     throw new ChatbotError(
       "bad_request:database",
       "Failed to get campaign directory"
+    );
+  }
+}
+
+export async function getPaginatedCampaignDirectory(params: {
+  page: number;
+  pageSize: number;
+  q?: string;
+  status?: string;
+}): Promise<{
+  items: Awaited<ReturnType<typeof getCampaignDirectory>>;
+  pagination: PaginationMeta;
+}> {
+  try {
+    const filters: SQL<unknown>[] = [];
+    const normalizedQuery = params.q?.trim();
+
+    if (normalizedQuery) {
+      const searchPattern = `%${normalizedQuery}%`;
+      const searchFilter = or(
+        ilike(campaign.name, searchPattern),
+        ilike(campaign.subject, searchPattern),
+        ilike(campaign.segment, searchPattern)
+      );
+
+      if (searchFilter) {
+        filters.push(searchFilter);
+      }
+    }
+
+    if (params.status && params.status !== "all") {
+      filters.push(eq(campaign.status, params.status));
+    }
+
+    const whereClause = filters.length > 0 ? and(...filters) : undefined;
+
+    const [countResult] = await db
+      .select({ count: count(campaign.id) })
+      .from(campaign)
+      .where(whereClause);
+
+    const pagination = buildPaginationMeta({
+      page: params.page,
+      pageSize: params.pageSize,
+      total: countResult?.count ?? 0,
+    });
+
+    const campaigns = await db
+      .select()
+      .from(campaign)
+      .where(whereClause)
+      .orderBy(desc(campaign.createdAt))
+      .limit(pagination.pageSize)
+      .offset((pagination.page - 1) * pagination.pageSize);
+
+    const campaignIds = campaigns.map((entry) => entry.id);
+    const logs =
+      campaignIds.length === 0
+        ? []
+        : await db
+            .select({
+              campaignId: campaignLog.campaignId,
+              status: campaignLog.status,
+            })
+            .from(campaignLog)
+            .where(inArray(campaignLog.campaignId, campaignIds));
+
+    const logMap = logs.reduce<
+      Map<string, { failedCount: number; sentCount: number }>
+    >((acc, entry) => {
+      const current = acc.get(entry.campaignId) ?? {
+        sentCount: 0,
+        failedCount: 0,
+      };
+
+      if (entry.status === "sent") {
+        current.sentCount += 1;
+      } else {
+        current.failedCount += 1;
+      }
+
+      acc.set(entry.campaignId, current);
+      return acc;
+    }, new Map());
+
+    return {
+      items: campaigns.map((entry) => {
+        const stats = logMap.get(entry.id) ?? { sentCount: 0, failedCount: 0 };
+        return {
+          ...entry,
+          sentCount: stats.sentCount,
+          failedCount: stats.failedCount,
+        };
+      }),
+      pagination,
+    };
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get paginated campaign directory"
     );
   }
 }
@@ -1338,6 +1606,7 @@ export async function getTelemetryOverview({ days = 30 }: { days?: number }) {
       chatsInWindow,
       documentsInWindow,
       campaignsInWindow,
+      emailLogsInWindow,
     ] = await Promise.all([
       db
         .select({
@@ -1367,6 +1636,14 @@ export async function getTelemetryOverview({ days = 30 }: { days?: number }) {
         })
         .from(campaign)
         .where(gte(campaign.createdAt, cutoff)),
+      db
+        .select({
+          sentAt: emailLog.sentAt,
+          status: emailLog.status,
+          provider: emailLog.provider,
+        })
+        .from(emailLog)
+        .where(gte(emailLog.sentAt, cutoff)),
     ]);
 
     const buckets = Array.from({ length: days }, (_, index) => {
@@ -1436,6 +1713,12 @@ export async function getTelemetryOverview({ days = 30 }: { days?: number }) {
         sentCampaigns: campaignsInWindow.filter(
           (entry) => entry.status === "sent"
         ).length,
+        emailDeliveries: emailLogsInWindow.filter(
+          (entry) => entry.status === "sent"
+        ).length,
+        emailFailures: emailLogsInWindow.filter(
+          (entry) => entry.status !== "sent"
+        ).length,
       },
       series: buckets,
     };
@@ -1447,120 +1730,254 @@ export async function getTelemetryOverview({ days = 30 }: { days?: number }) {
   }
 }
 
-export async function getSystemActivityFeed({
-  limit = 40,
-}: {
-  limit?: number;
-}) {
-  try {
-    const [
-      recentChats,
-      recentMessages,
-      recentDocuments,
-      recentCampaigns,
-      recentKnowledge,
-    ] = await Promise.all([
-      db
-        .select({
-          id: chat.id,
-          title: chat.title,
-          createdAt: chat.createdAt,
-          visibility: chat.visibility,
-        })
-        .from(chat)
-        .orderBy(desc(chat.createdAt))
-        .limit(limit),
-      db
-        .select({
-          id: message.id,
-          createdAt: message.createdAt,
-          role: message.role,
-          chatId: message.chatId,
-          chatTitle: chat.title,
-        })
-        .from(message)
-        .innerJoin(chat, eq(message.chatId, chat.id))
-        .orderBy(desc(message.createdAt))
-        .limit(limit),
-      db
-        .select({
-          id: document.id,
-          createdAt: document.createdAt,
-          title: document.title,
-          kind: document.kind,
-        })
-        .from(document)
-        .orderBy(desc(document.createdAt))
-        .limit(limit),
-      db
-        .select({
-          id: campaign.id,
-          createdAt: campaign.createdAt,
-          name: campaign.name,
-          status: campaign.status,
-          sentAt: campaign.sentAt,
-        })
-        .from(campaign)
-        .orderBy(desc(campaign.createdAt))
-        .limit(limit),
-      db
-        .select({
-          id: knowledgeDocument.id,
-          title: knowledgeDocument.title,
-          createdAt: knowledgeDocument.createdAt,
-          updatedAt: knowledgeDocument.updatedAt,
-        })
-        .from(knowledgeDocument)
-        .orderBy(desc(knowledgeDocument.updatedAt))
-        .limit(limit),
-    ]);
+export type SystemActivityType =
+  | "all"
+  | "campaign"
+  | "chat"
+  | "document"
+  | "email"
+  | "knowledge"
+  | "message";
 
-    return [
-      ...recentChats.map((entry) => ({
-        id: `chat-${entry.id}`,
-        type: "chat" as const,
-        title: "Chat created",
-        description: `${entry.title} (${entry.visibility})`,
-        createdAt: entry.createdAt,
-        href: `/assistant/${entry.id}`,
-      })),
-      ...recentMessages.map((entry) => ({
-        id: `message-${entry.id}`,
-        type: "message" as const,
-        title: `${entry.role === "user" ? "User" : "Assistant"} message stored`,
-        description: entry.chatTitle,
-        createdAt: entry.createdAt,
-        href: `/assistant/${entry.chatId}`,
-      })),
-      ...recentDocuments.map((entry) => ({
-        id: `document-${entry.id}-${entry.createdAt.toISOString()}`,
-        type: "document" as const,
-        title: `${entry.kind} artifact saved`,
-        description: entry.title,
-        createdAt: entry.createdAt,
-        href: "/assistant",
-      })),
-      ...recentCampaigns.map((entry) => ({
-        id: `campaign-${entry.id}`,
-        type: "campaign" as const,
-        title: entry.status === "sent" ? "Campaign sent" : "Campaign drafted",
-        description: entry.name,
-        createdAt: entry.sentAt ?? entry.createdAt,
-        href: "/campaigns",
-      })),
-      ...recentKnowledge.map((entry) => ({
-        id: `knowledge-${entry.id}`,
-        type: "knowledge" as const,
-        title: "Knowledge document updated",
-        description: entry.title,
-        createdAt: entry.updatedAt ?? entry.createdAt,
-        href: "/knowledge-base",
-      })),
-    ]
+type SystemActivityEntry = {
+  createdAt: Date;
+  description: string;
+  href: string;
+  id: string;
+  title: string;
+  type: Exclude<SystemActivityType, "all">;
+};
+
+export async function getSystemActivityFeed({
+  page,
+  pageSize,
+  type = "all",
+}: {
+  page: number;
+  pageSize: number;
+  type?: SystemActivityType;
+}): Promise<{
+  items: SystemActivityEntry[];
+  pagination: PaginationMeta;
+}> {
+  try {
+    const sourceTypes: Exclude<SystemActivityType, "all">[] =
+      type === "all"
+        ? ["chat", "message", "document", "campaign", "email", "knowledge"]
+        : [type];
+
+    const countEntries = await Promise.all(
+      sourceTypes.map(async (sourceType) => {
+        switch (sourceType) {
+          case "chat": {
+            const [result] = await db
+              .select({ count: count(chat.id) })
+              .from(chat);
+            return [sourceType, result?.count ?? 0] as const;
+          }
+          case "message": {
+            const [result] = await db
+              .select({ count: count(message.id) })
+              .from(message)
+              .innerJoin(chat, eq(message.chatId, chat.id));
+            return [sourceType, result?.count ?? 0] as const;
+          }
+          case "document": {
+            const [result] = await db
+              .select({ count: count(document.id) })
+              .from(document);
+            return [sourceType, result?.count ?? 0] as const;
+          }
+          case "campaign": {
+            const [result] = await db
+              .select({ count: count(campaign.id) })
+              .from(campaign);
+            return [sourceType, result?.count ?? 0] as const;
+          }
+          case "knowledge": {
+            const [result] = await db
+              .select({ count: count(knowledgeDocument.id) })
+              .from(knowledgeDocument);
+            return [sourceType, result?.count ?? 0] as const;
+          }
+          case "email": {
+            const [result] = await db
+              .select({ count: count(emailLog.id) })
+              .from(emailLog);
+            return [sourceType, result?.count ?? 0] as const;
+          }
+          default: {
+            return [sourceType, 0] as const;
+          }
+        }
+      })
+    );
+
+    const total = countEntries.reduce((sum, [, current]) => sum + current, 0);
+    const pagination = buildPaginationMeta({ page, pageSize, total });
+    const fetchLimit = pagination.page * pagination.pageSize;
+    const campaignActivityAt = sql<Date>`coalesce(${campaign.sentAt}, ${campaign.createdAt})`;
+
+    const feeds = await Promise.all(
+      sourceTypes.map(async (sourceType): Promise<SystemActivityEntry[]> => {
+        switch (sourceType) {
+          case "chat": {
+            const recentChats = await db
+              .select({
+                id: chat.id,
+                title: chat.title,
+                createdAt: chat.createdAt,
+                visibility: chat.visibility,
+              })
+              .from(chat)
+              .orderBy(desc(chat.createdAt))
+              .limit(fetchLimit);
+
+            return recentChats.map((entry) => ({
+              createdAt: entry.createdAt,
+              description: `${entry.title} (${entry.visibility})`,
+              href: `/assistant/${entry.id}`,
+              id: `chat-${entry.id}`,
+              title: "Chat created",
+              type: "chat" as const,
+            }));
+          }
+          case "message": {
+            const recentMessages = await db
+              .select({
+                id: message.id,
+                createdAt: message.createdAt,
+                role: message.role,
+                chatId: message.chatId,
+                chatTitle: chat.title,
+              })
+              .from(message)
+              .innerJoin(chat, eq(message.chatId, chat.id))
+              .orderBy(desc(message.createdAt))
+              .limit(fetchLimit);
+
+            return recentMessages.map((entry) => ({
+              createdAt: entry.createdAt,
+              description: entry.chatTitle,
+              href: `/assistant/${entry.chatId}`,
+              id: `message-${entry.id}`,
+              title:
+                entry.role === "user"
+                  ? "User message stored"
+                  : "Assistant message stored",
+              type: "message" as const,
+            }));
+          }
+          case "document": {
+            const recentDocuments = await db
+              .select({
+                id: document.id,
+                createdAt: document.createdAt,
+                title: document.title,
+                kind: document.kind,
+              })
+              .from(document)
+              .orderBy(desc(document.createdAt))
+              .limit(fetchLimit);
+
+            return recentDocuments.map((entry) => ({
+              createdAt: entry.createdAt,
+              description: entry.title,
+              href: "/assistant",
+              id: `document-${entry.id}-${entry.createdAt.toISOString()}`,
+              title: `${entry.kind} artifact saved`,
+              type: "document" as const,
+            }));
+          }
+          case "campaign": {
+            const recentCampaigns = await db
+              .select({
+                activityAt: campaignActivityAt,
+                id: campaign.id,
+                name: campaign.name,
+                status: campaign.status,
+              })
+              .from(campaign)
+              .orderBy(desc(campaignActivityAt))
+              .limit(fetchLimit);
+
+            return recentCampaigns.map((entry) => ({
+              createdAt: entry.activityAt,
+              description: entry.name,
+              href: "/campaigns",
+              id: `campaign-${entry.id}`,
+              title:
+                entry.status === "sent" ? "Campaign sent" : "Campaign drafted",
+              type: "campaign" as const,
+            }));
+          }
+          case "knowledge": {
+            const recentKnowledge = await db
+              .select({
+                id: knowledgeDocument.id,
+                title: knowledgeDocument.title,
+                updatedAt: knowledgeDocument.updatedAt,
+              })
+              .from(knowledgeDocument)
+              .orderBy(desc(knowledgeDocument.updatedAt))
+              .limit(fetchLimit);
+
+            return recentKnowledge.map((entry) => ({
+              createdAt: entry.updatedAt,
+              description: entry.title,
+              href: "/knowledge-base",
+              id: `knowledge-${entry.id}`,
+              title: "Knowledge document updated",
+              type: "knowledge" as const,
+            }));
+          }
+          case "email": {
+            const recentEmails = await db
+              .select({
+                id: emailLog.id,
+                recipient: emailLog.recipient,
+                subject: emailLog.subject,
+                status: emailLog.status,
+                provider: emailLog.provider,
+                sentAt: emailLog.sentAt,
+              })
+              .from(emailLog)
+              .orderBy(desc(emailLog.sentAt))
+              .limit(fetchLimit);
+
+            return recentEmails.map((entry) => ({
+              createdAt: entry.sentAt,
+              description: `${entry.subject} -> ${entry.recipient} (${entry.provider})`,
+              href: "/campaigns",
+              id: `email-${entry.id}`,
+              title:
+                entry.status === "sent"
+                  ? "Email delivered"
+                  : "Email delivery failed",
+              type: "email" as const,
+            }));
+          }
+          default: {
+            return [];
+          }
+        }
+      })
+    );
+
+    const items = feeds
+      .flat()
       .sort(
         (left, right) => right.createdAt.getTime() - left.createdAt.getTime()
       )
-      .slice(0, limit);
+      .slice(
+        (pagination.page - 1) * pagination.pageSize,
+        pagination.page * pagination.pageSize
+      );
+
+    return {
+      items,
+      pagination,
+    };
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",

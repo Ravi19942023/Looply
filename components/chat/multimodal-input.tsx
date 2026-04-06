@@ -170,44 +170,9 @@ function PureMultimodalInput({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<string[]>([]);
-  const [sessionFiles, setSessionFiles] = useState<Attachment[]>([]);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [slashIndex, setSlashIndex] = useState(0);
-
-  useEffect(() => {
-    async function loadSessionFiles() {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/chat-files?chatId=${chatId}`
-      );
-
-      if (!response.ok) {
-        setSessionFiles([]);
-        return;
-      }
-
-      const data = (await response.json()) as Array<{
-        contentType: string;
-        fileName: string;
-        id: string;
-        url: string;
-      }>;
-
-      setSessionFiles(
-        data.map((entry) => ({
-          id: entry.id,
-          name: entry.fileName,
-          url: entry.url,
-          contentType: entry.contentType,
-          kind: "session-document",
-        }))
-      );
-    }
-
-    if (chatId) {
-      loadSessionFiles().catch(() => undefined);
-    }
-  }, [chatId]);
 
   const submitForm = useCallback(() => {
     window.history.pushState(
@@ -286,6 +251,10 @@ function PureMultimodalInput({
           const data = await response.json();
           const { url, pathname, contentType, id, fileName } = data;
 
+          if (isSessionDocument) {
+            toast.success("Document added to this chat's retrieval context");
+          }
+
           return {
             url,
             id,
@@ -318,15 +287,7 @@ function PureMultimodalInput({
 
         setAttachments((currentAttachments) => [
           ...currentAttachments,
-          ...successfullyUploadedAttachments.filter(
-            (attachment) => attachment.kind === "image"
-          ),
-        ]);
-        setSessionFiles((currentFiles) => [
-          ...currentFiles,
-          ...successfullyUploadedAttachments.filter(
-            (attachment) => attachment.kind === "session-document"
-          ),
+          ...successfullyUploadedAttachments,
         ]);
       } catch (_error) {
         toast.error("Failed to upload files");
@@ -502,42 +463,6 @@ function PureMultimodalInput({
                 key={filename}
               />
             ))}
-          </div>
-        )}
-        {sessionFiles.length > 0 && (
-          <div className="mx-3 mb-1 rounded-2xl border border-border/30 bg-card/40 px-3 py-3">
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/60">
-              Session Files
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {sessionFiles.map((attachment) => (
-                <div
-                  className="flex items-center gap-2 rounded-xl bg-background/70 px-3 py-2 text-sm"
-                  key={attachment.id ?? attachment.url}
-                >
-                  <span className="max-w-[220px] truncate">
-                    {attachment.name}
-                  </span>
-                  <button
-                    className="text-xs text-muted-foreground transition hover:text-destructive"
-                    onClick={() => {
-                      if (attachment.id) {
-                        fetch(
-                          `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/chat-files/${attachment.id}`,
-                          { method: "DELETE" }
-                        ).catch(() => undefined);
-                      }
-                      setSessionFiles((current) =>
-                        current.filter((item) => item.id !== attachment.id)
-                      );
-                    }}
-                    type="button"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
           </div>
         )}
         <PromptInputTextarea

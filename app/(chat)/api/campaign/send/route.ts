@@ -20,7 +20,8 @@ export async function POST(request: Request) {
   const result = await sendCampaignDraft(body.campaignId, true);
 
   if ("error" in result) {
-    return Response.json(result, { status: 404 });
+    const status = result.error === "Campaign not found." ? 404 : 400;
+    return Response.json(result, { status });
   }
 
   return Response.json(result, { status: 200 });
