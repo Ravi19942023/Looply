@@ -51,11 +51,12 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    prefetchInlining: true,
-    cachedNavigations: true,
-    appNewScrollHandler: true,
-    inlineCss: true,
-    turbopackFileSystemCacheForDev: true,
+    typedRoutes: false,
+    // prefetchInlining: true,
+    // cachedNavigations: true,
+    // appNewScrollHandler: true,
+    // inlineCss: true,
+    // turbopackFileSystemCacheForDev: false,
   },
 };
 

@@ -29,3 +29,13 @@ Looply follows a **modular Next.js architecture**. Database logic is isolated in
 - **Checkpoint 3 (Memory)**: Implemented tiered memory management. Added `CHAT_HISTORY_LIMIT` environment variable support to tune short-term memory depth. Clarified AI tools for long-term user context.
 - **Checkpoint 4 (Math Rendering)**: **COMPLETE**. Successfully migrated from KaTeX to MathJax. Fixed "Invisible Formula" bugs in streaming reasoning blocks by disabling SVG font caching (`fontCache: 'none'`), ensuring all character paths are embedded directly in SVGs. Implemented robust `mathjaxPlugin` in `lib/math/mathjax-plugin.ts` with explicit Support for AMS packages and bare LaTeX environments (\begin{...}).
 - **Checkpoint 5 (Telemetry UI Refinement)**: **COMPLETE**. Successfully stripped away the 7d/30d/90d time-window filters to achieve a cleaner, enterprise-grade dashboard. Updated the page logic to default to a comprehensive history window (365 days) while ensuring all tables remain sorted by most recent activity first. Refactored `TelemetryTabs` to remove `days` dependency, further simplifying the navigation and URL state.
+
+- **Checkpoint 6 (Router Type Debugging)**: Investigating a Next.js build error in \.next/dev/types/routes.d.ts\ at line 69. The error suggests a syntax corruption in the automatically generated type file.
+
+- Verified that \.next/dev/types/routes.d.ts\ was corrupted with duplicate/truncated blocks.
+- Cleared \.next\ folder and \	sconfig.tsbuildinfo\ locally.
+- Disabled \experimental.turbopackFileSystemCacheForDev\ in \
+ext.config.ts\ to prevent future corruptions on Windows.
+
+- Restored \cacheComponents: true\ to \experimental\ block in \
+ext.config.ts\ as it is required by \cachedNavigations\ in this Next.js version.
